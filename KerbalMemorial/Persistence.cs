@@ -77,11 +77,11 @@ namespace KerbalMemorial
         {
             Directory.CreateDirectory(DirectoryPath);
             string path = Path.Combine(DirectoryPath, "Casualties-" + DateTime.Now.ToString("yyyyMMdd-HHmmss-fff") + ".csv");
-            var lines = new List<string> { "Name,OriginalName,Profession,Gender,Type,Level,Status,Fatal,UT,DeathUT,ReturnUT,Timeline,Vessel,VesselID,Part,Body,Situation,EVA,Latitude,Longitude,Altitude_m,Speed_m_s,G,MET_s,ContextUT,ContextQuality,Cause,Confidence,Source,Notes,History,ID" };
+            var lines = new List<string> { "Name,OriginalName,Profession,Gender,Type,Level,Status,Fatal,UT,DeathUT,ReturnUT,Timeline,Vessel,VesselID,Part,Body,Situation,EVA,Latitude,Longitude,Altitude_m,Speed_m_s,G,MET_s,ContextUT,ContextQuality,Cause,Confidence,Source,Notes,History,ID,Inscription" };
             foreach (var r in records)
             {
                 var c = r.Location ?? new Context();
-                lines.Add(string.Join(",", new[] { r.Name,r.OriginalName,r.Trait,r.Gender,r.CrewType,r.Level,r.DisplayStatus,r.Fatal.ToString(), TimeValue(r.UT),TimeValue(r.DeathUT),TimeValue(r.ReturnUT),live.Contains(r.Id)?"Current":"Archived",c.Vessel,c.VesselId,c.PartTitle,c.Body,c.Situation,c.EVA,Ledger.Number(c.Latitude),Ledger.Number(c.Longitude),Ledger.Number(c.Altitude),Ledger.Number(c.Speed),Ledger.Number(c.Gee),Ledger.Number(c.MET),TimeValue(c.UT),c.Quality,r.Cause,r.Confidence,r.Source,r.Notes,r.History,r.Id }.Select(Ledger.Csv).ToArray()));
+                lines.Add(string.Join(",", new[] { r.Name,r.OriginalName,r.Trait,r.Gender,r.CrewType,r.Level,r.DisplayStatus,r.Fatal.ToString(), TimeValue(r.UT),TimeValue(r.DeathUT),TimeValue(r.ReturnUT),live.Contains(r.Id)?"Current":"Archived",c.Vessel,c.VesselId,c.PartTitle,c.Body,c.Situation,c.EVA,Ledger.Number(c.Latitude),Ledger.Number(c.Longitude),Ledger.Number(c.Altitude),Ledger.Number(c.Speed),Ledger.Number(c.Gee),Ledger.Number(c.MET),TimeValue(c.UT),c.Quality,r.Cause,r.Confidence,r.Source,r.Notes,r.History,r.Id,r.Inscription }.Select(Ledger.Csv).ToArray()));
             }
             File.WriteAllLines(path, lines, new System.Text.UTF8Encoding(true)); return path;
         }

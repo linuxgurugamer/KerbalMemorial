@@ -52,9 +52,52 @@ Use a disposable save, with and without Missing Crew Respawn enabled. Back up th
 - Check 0, 9, 42, 1000, 9999, over-limit counts and unknown-date dashes, including a transition back to 0; old digits must be fully cleared.
 - Adjust sign width and height; confirm unchanged 3:2 aspect ratio, no texture compression artifacts, and no new external artwork files needed in GameData. Check at different KSP texture quality settings.
 
-- Open Memorial Wall from the main tabs. Verify original decorative artwork, no fictional plaques, actual portraits/names/dates, missing and respawned labels, unknown data fallback, archive visibility, chronological scrolling with many records, dragging/resizing/centered Close, F2 hiding, and scene cleanup. Verify returned ordinary MIA is excluded and toggling permanent history changes archived plaques.
+- Open Memorial Wall directly from the toolbar. Verify original decorative artwork, no fictional plaques, actual portraits/names/dates, missing and respawned labels, unknown data fallback, archive visibility, chronological scrolling with many records, dragging/resizing/centered Close, F2 hiding, and scene cleanup. Verify returned ordinary MIA is excluded and toggling permanent history changes archived plaques.
 
 ## Memorial Wall window sizing (0.1.0.15)
 - Open the wall with zero casualties and again with several casualties. Without moving the mouse, verify it remains at its intended full size (1060 x 760 on a sufficiently large screen).
 - Drag the title or unused background, release the mouse and wait. Verify no shrinking, disappearance or flicker; scroll, resize from the lower-right handle, and verify the new size remains stable. Close and reopen; confirm the chosen size is retained for the current scene.
 - Test on smaller resolutions and after changing resolution; the window must stay within the screen. Verify the main window and sign settings still work and click-through is blocked.
+
+- Open the Memorial Wall and verify the stone background appears as one continuous surface with no obvious repeating rectangular tiles, including after resizing the window.
+
+- Open the Memorial Wall and toggle between Classic and Alternate themes; verify the Alternate theme uses the supplied industrial wall styling, dynamic plaques, and remains scrollable/resizable.
+
+- Switch to Alternate with zero casualties: verify no sample plaques, names, dates or portraits are visible. With casualties, verify white left-aligned text, silver divider, correct saved portraits and dates, and a blank inset for unavailable portraits (with an explanatory label). Switch back to Classic and check bronze lettering is unchanged. Scroll and resize both themes.
+
+## Compact casualty details (0.1.0.20)
+- Open the Memorial tab and select a casualty. Verify that the default panel contains only the name/status, saved portrait and six requested labeled fields. No notes, confidence, timeline, telemetry or career history should appear until Show Full Details is selected.
+- Select Show Full Details and verify every previous field and editable notes remain accessible; select Hide Full Details and check the compact view is restored. The button remains outside the scrolling detail panel. Switch records, including missing or undated fatalities, and verify unknown values and portraits are handled as before.
+- Check that both Memorial Wall themes, CSV export and sign settings remain unchanged.
+
+### Wall settings and plaque information (0.1.0.21)
+- In Settings / Help choose Alternate; verify the open wall switches immediately. Switch back via the wall button and verify Settings / Help shows Classic.
+- Hide the theme button while the wall is open; verify it disappears and the theme remains selectable in settings. Re-enable it. Save the game and reload; verify both preferences persist.
+- Click the portrait, name, and background of a plaque in each theme, including a plaque revealed by scrolling. The same casualty opens as an individual plaque first; click Details to open its information window with portrait and compact details. Verify no click-through or accidental wall dragging.
+- Open full details and edit notes for a current or archived record; verify the main list and saved records reflect the edit. Click a different wall plaque; verify the previous details close, the correct individual plaque opens, and Details opens its reset summary.
+- Verify scrollbar, theme button, drag, resize, Close and F2 work with the information window open; closing the wall closes the information window; closing the main ledger does not.
+- Verify quickload/removal of a record cannot cause the popup to display a different casualty or edit a stale record.
+
+- Verify both stock and Blizzy toolbar icons load from PluginData/Textures and open/close normally.
+
+- Click a lost Kerbal on either wall theme to open the individual plaque. Verify the portrait, name, date and notes belong to that record and no sample data is visible. Check unknown date/missing portrait, blank and long notes, theme switching, F2, dragging, close, opening a different casualty, and small screen fit. Closing Kerbal Information leaves the individual plaque open; closing the plaque or wall closes its child windows.
+
+## Pause visibility (0.1.0.24)
+- Open the main Memorial, Sign Settings, Memorial Wall, Kerbal Information and Individual Memorial Plaque windows in flight. Pause with Escape; verify all five disappear. Resume; verify the same windows, selections and scroll positions return.
+- Repeat with F2 hidden before pausing. Resume while F2 is still hidden; verify none appear until the UI is shown again. Test pause and F2 in reverse order too.
+- Pause with all windows closed and resume; verify none open automatically. Check pause/resume in map view and the editor/space center/tracking station wherever KSP emits pause events. Verify dragging/resizing works after resuming and scene changes do not leave stale pause state.
+
+- Add multiple .txt files in PluginData/Inscriptions with Markdown headings, blank lines, bullet lists and plain messages. Trigger a casualty: confirm only valid messages are used, duplicate fatality events do not change the inscription, both themes display it, and save/reload and permanent archive preserve it. Check missing crew without confirmed fatalities do not get inscriptions; historical imports, old saved fatalities and archived fatalities receive inscriptions automatically. Verify empty folders do not interrupt casualty tracking; add a file during play and confirm missing inscriptions are assigned within ten seconds. Verify save/reload, archive reconciliation and respawned fatalities preserve assigned messages. Verify notes remain independently editable.
+
+## KRASH and inscription layout (0.1.0.27)
+- With and without permanent history enabled, launch a KRASH simulation, kill a crew member, wait for a roster poll, and end/restart the simulation. Verify no new casualty, notification, inscription, archive entry or accident-counter reset. Test a death immediately after launching the simulation and an external ReportDeath call during simulation.
+- Launch a real flight afterward and verify normal fatality capture, inscriptions and archive writes resume. Repeat without KRASH installed. Check the KSP log for reflection warnings.
+- Open individual plaques in both themes with a short inscription, a longer sentence and several lines of text. Confirm large centered lettering, wrapping at roughly 80% of the panel width, no clipping, and scrolling only when necessary. Repeat at a smaller screen resolution.
+
+## Optional integration wrapper and plaque navigation (0.1.0.28)
+- Copy Integration/KerbalMemorialWrapper.cs into a test mod without referencing KerbalMemorial.dll. With Kerbal Memorial absent, verify IsAvailable and ReportDeath return false without errors. Install the mod and verify IsAvailable, then report an actual death with a source and cause; verify true, one casualty, and the supplied cause/evidence. Test invalid inputs, unavailable tracker, KRASH simulation and a repeated report for the same casualty.
+- For both wall themes, click a plaque: only the individual plaque opens. Click Details: the matching information window opens above it, and contains no View Memorial Plaque button. Close Details; the individual plaque stays open. Click a different wall plaque while Details is open: the old Details closes and the new plaque opens. Verify closing the plaque or wall closes its descendants; closing the main ledger closes only its Sign Settings child, and pause/F2 still hide and restore open windows.
+
+## Wall-first navigation (0.1.0.29)
+- Click either toolbar icon: only the Memorial Wall opens. Click Kerbal Memorial in its footer: the main ledger opens, with no Memorial Wall button beside its tabs. Verify the wall remains open and the toolbar stays active. Close the ledger; verify the wall and its plaque windows remain open and the ledger’s Sign Settings window closes. Reopen the ledger from the wall; verify its previous position is retained.
+- Open the ledger, Sign Settings and a wall plaque with Details. Close the wall: all associated windows close and the toolbar turns off. Repeat by toggling the toolbar off. Toggle on again: only the wall opens. Verify the wall works with an empty ledger, both themes, hidden theme button, pause/F2 and scene changes.

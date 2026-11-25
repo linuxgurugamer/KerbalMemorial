@@ -14,5 +14,9 @@ namespace KerbalMemorial
         public bool notifications = true;
         [GameParameters.CustomParameterUI("Import existing casualties", toolTip = "Record already dead or missing crew when the tracker first sees them. Dates may be unknown.")]
         public bool importExisting = true;
+        [GameParameters.CustomParameterUI("Use Alternate memorial wall theme", toolTip = "Off selects Classic; on selects the industrial Alternate wall.")]
+        public bool alternateWallTheme = false;
+        [GameParameters.CustomParameterUI("Hide theme button on memorial wall", toolTip = "The theme can still be selected from the Memorial Settings / Help tab.")]
+        public bool hideWallThemeButton = false;
     }
 }

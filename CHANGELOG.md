@@ -1,3 +1,58 @@
+# 0.1.0.29
+- Open the Memorial Wall first from either toolbar. Add a Kerbal Memorial button to the wall footer and remove the Memorial Wall button from the main window.
+- Closing the main window leaves the wall open; closing the wall or toggling the toolbar off closes all associated windows.
+
+# 0.1.0.28
+- Add a standalone reflection-based KerbalMemorialWrapper.cs for optional death reporting by other mods; preserve the existing public API.
+- Open the individual plaque directly from either memorial wall theme. Add Details to the plaque and remove View Memorial Plaque from Kerbal Information. Close child windows when the plaque or wall closes.
+
+# 0.1.0.27
+- Exclude KRASH simulations from casualty tracking, roster imports, external death reports and permanent archive updates using optional runtime detection.
+- Enlarge individual plaque inscriptions in both themes, wrap within the central 80% of the panel and retain scrolling for exceptionally long messages.
+
+# 0.1.0.26
+- Automatically backfill missing inscriptions for existing confirmed fatalities, including historical imports, respawned fatalities and archived records. Retry when files become available and preserve existing inscriptions across live/archive copies.
+
+# 0.1.0.25
+- Choose and save a random memorial inscription from PluginData/Inscriptions/*.txt when a new fatality is confirmed. Skip Markdown headings and list formatting. Keep the inscription separate from casualty notes.
+- Display saved inscriptions on individual plaques in either theme; retain notes for older records without an inscription. Include the inscription in CSV exports.
+
+# 0.1.0.24
+- Hide all Memorial windows while KSP is paused; restore their previous open state on resume. Keep F2 visibility independent of pause state.
+
+# 0.1.0.23
+- Add a View Memorial Plaque button to the Kerbal Information window. The new individual plaque follows the current wall theme and displays the selected casualty's saved portrait, name, date, and notes.
+- Use the supplied Classic individual plaque art with sample data removed, and adapt the existing cleaned Alternate industrial plaque art into a matching large plaque template.
+
+# 0.1.0.22
+- Move the toolbar icon textures into PluginData/Textures and update their paths.
+- Rename the toolbar field to toolbarController.
+
+# 0.1.0.21
+- Add Classic/Alternate theme selection and a hide-theme-button option to Settings / Help and stock difficulty settings, using the existing per-save preferences.
+- Synchronize the wall theme button with those settings.
+- Make plaques in both wall themes clickable; open a separate Kerbal Information window with the shared summary/full-detail view, portrait and notes.
+
+# 0.1.0.20
+- Simplify the main Memorial tab casualty detail panel to name/status, portrait, fatality confirmation date, cause, evidence, vessel name, part and body. Add a Show/Hide Full Details button for the remaining fields, notes and history.
+
+# 0.1.0.19
+- Remove all sample portraits, names and dates from the alternate wall and plaque artwork.
+- Give the alternate theme its own plaque layout, white left-aligned typography and silver divider; remove translucent sample-plaque masking and Classic plaque fallback.
+- Reset scroll position when switching themes.
+
+# 0.1.0.18
+- Fix the invalid literal newline in the Classic Memorial Wall fallback heading.
+
+# 0.1.0.17
+- Add an alternate Memorial Wall theme based on the user-supplied industrial wall image.
+- Keep the existing wall as the Classic theme and add a Theme toggle button in the Memorial Wall window to switch between Classic and Alternate styles.
+- Use the supplied image as the alternate wall frame/background and a cropped plaque style while continuing to generate the actual casualties dynamically from the ledger.
+
+# 0.1.0.16
+- Replace the memorial wall background tile drawing with a single procedurally generated stone panel so the wall surface appears continuous instead of visibly repeating in rectangular blocks.
+- Regenerate the wall background texture at the current wall size and cache it until the window size changes materially.
+
 # 0.1.0.15
 - Fix the Memorial Wall shrinking and flickering by using a fixed-size ClickThroughBlocker GUIWindow instead of GUILayoutWindow; preserve the requested dimensions independently of drag events.
 - Populate the plaque list immediately when opening, even before the next Layout event.

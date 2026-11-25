@@ -18,14 +18,14 @@ namespace KerbalMemorial
         private readonly Dictionary<string, Hint> hints = new Dictionary<string, Hint>();
         private sealed class Hint { public string Cause, Confidence, Source; public float Time; public Context Location; }
         private bool ready, initialized, archiveLoaded, archiveDirty, wasPermanent, subscribed;
-        private float nextPoll, nextWrite, nextPortraitPoll;
+        private float nextPoll, nextWrite, nextPortraitPoll, nextInscriptionPoll;
         private string saveFolder;
         private Vessel portraitVessel;
         internal string Error { get; private set; }
         internal static double Now => Planetarium.GetUniversalTime();
         internal static Settings Options => HighLogic.CurrentGame.Parameters.CustomParams<Settings>();
         internal bool Permanent => HighLogic.CurrentGame != null && Options.permanentHistory;
-        private bool Active => ready && Instance == this && HighLogic.CurrentGame != null && saveFolder == HighLogic.SaveFolder;
+        private bool Active => ready && Instance == this && HighLogic.CurrentGame != null && saveFolder == HighLogic.SaveFolder && !KrashIntegration.IsSimulationActive;
         internal bool IsReady => Active && initialized;
         private static bool Lost(RS status) => status == RS.Dead || status == RS.Missing;
         private static bool Alive(RS status) => status == RS.Available || status == RS.Assigned;
@@ -75,12 +75,12 @@ namespace KerbalMemorial
             archive.Clear(); portraitVessel = null; portraits.Read(node); snapshots.Clear(); hints.Clear(); seen.Clear();
             initialized = archiveLoaded = archiveDirty = wasPermanent = false; Error = null;
             bool.TryParse(node.GetValue("initialized"), out initialized);
-            saveFolder = HighLogic.SaveFolder; nextPoll = nextWrite = nextPortraitPoll = 0; ready = true;
+            saveFolder = HighLogic.SaveFolder; nextPoll = nextWrite = nextPortraitPoll = nextInscriptionPoll = 0; ready = true;
         }
         public override void OnSave(ConfigNode node)
         {
             base.OnSave(node);
-            if (Active) { try { Poll(); FlushArchive(); } catch (Exception e) { Debug.LogWarning("[KerbalMemorial] Save scan: " + e); } }
+            if (Active) { try { Poll(true); FlushArchive(); } catch (Exception e) { Debug.LogWarning("[KerbalMemorial] Save scan: " + e); } }
             node.SetValue("initialized", initialized.ToString(), true);
             Persistence.Write(node, Live.Records);
             portraits.Write(node);
@@ -129,7 +129,7 @@ namespace KerbalMemorial
             var roster = HighLogic.CurrentGame?.CrewRoster;
             return roster == null ? Enumerable.Empty<ProtoCrewMember>() : roster.Kerbals(RS.Available, RS.Assigned, RS.Missing, RS.Dead);
         }
-        private void Poll()
+        private void Poll(bool forceInscriptions = false)
         {
             if (!Active) return;
             EnsureArchive();
@@ -151,6 +151,11 @@ namespace KerbalMemorial
                 seen[crew.name] = status;
             }
             initialized = true;
+            if (forceInscriptions || Time.realtimeSinceStartup >= nextInscriptionPoll)
+            {
+                nextInscriptionPoll = Time.realtimeSinceStartup + 10f;
+                BackfillInscriptions();
+            }
             foreach (var name in hints.Where(h => Time.realtimeSinceStartup - h.Value.Time > 5f).Select(h => h.Key).ToArray()) hints.Remove(name);
         }
         private void BeforeStatus(ProtoCrewMember c, RS oldStatus, RS newStatus)
@@ -275,6 +280,7 @@ namespace KerbalMemorial
         }
         private Casualty Record(ProtoCrewMember crew, RS status, bool killed, bool imported, string source)
         {
+            if (!Active) return null;
             var old = Live.Open(crew.name); bool wasFatal = old != null && old.Fatal;
             var r = Live.Observe(crew.name, status.ToString(), Now, killed, imported);
             if (r == null) return null;
@@ -287,11 +293,48 @@ namespace KerbalMemorial
                 if (r.Location == null && !imported && snapshots.TryGetValue(crew.name, out Context ctx)) r.Location = ctx.Copy();
                 if (!imported) ApplyHint(r);
                 r.History = History(crew);
+                // Historical imports are handled together by the poll's backfill.
+                // Newly reported fatalities receive an inscription immediately.
+                if (r.Fatal && !imported && string.IsNullOrWhiteSpace(r.Inscription))
+                {
+                    EnsureArchive();
+                    Inscriptions.Assign(r, () =>
+                    {
+                        if (Permanent && archive.TryGetValue(r.Id, out Casualty previous) && !string.IsNullOrWhiteSpace(previous.Inscription))
+                            return previous.Inscription;
+                        return Inscriptions.Pick(ReadInscriptionPool());
+                    });
+                }
                 if (!imported && Options.notifications && (old == null || (!wasFatal && r.Fatal))) ScreenMessages.PostScreenMessage(crew.name + (r.Fatal ? " has died." : " is missing."), 4f, ScreenMessageStyle.UPPER_CENTER);
             }
             else { snapshots.Remove(crew.name); hints.Remove(crew.name); }
             Changed(r);
             return r;
+        }
+        private static List<string> ReadInscriptionPool()
+        {
+            return Inscriptions.ReadPool(System.IO.Path.Combine(KSPUtil.ApplicationRootPath,
+                "GameData", "KerbalMemorial", "PluginData", "Inscriptions"),
+                message => Debug.LogWarning("[KerbalMemorial] " + message));
+        }
+        private void BackfillInscriptions()
+        {
+            EnsureArchive();
+            // Read once per pass, only if at least one fatality needs a message.
+            List<string> pool = null;
+            Func<string> pick = () => Inscriptions.Pick(pool ?? (pool = ReadInscriptionPool()));
+            bool includeArchive = Permanent && archiveLoaded;
+            var liveIds = new HashSet<string>();
+            foreach (var record in Live.Records)
+            {
+                Casualty archived = null;
+                if (includeArchive) { liveIds.Add(record.Id); archive.TryGetValue(record.Id, out archived); }
+                if (Inscriptions.FillPair(record, archived, pick)) archiveDirty = true;
+            }
+            if (includeArchive)
+                foreach (var record in archive.Values)
+                    if (!liveIds.Contains(record.Id) && Inscriptions.Assign(record, pick)) archiveDirty = true;
+            if (includeArchive && archiveDirty) FlushArchive();
         }
         private static string History(ProtoCrewMember crew)
         {
@@ -310,6 +353,7 @@ namespace KerbalMemorial
         }
         private void EnsureArchive()
         {
+            if (KrashIntegration.IsSimulationActive) return;
             if (!Permanent) { wasPermanent = false; return; }
             if (!archiveLoaded)
             {
@@ -331,13 +375,14 @@ namespace KerbalMemorial
             {
                 if (previous.Closed && !copy.Closed) copy.ReturnUT = previous.ReturnUT;
                 if (string.IsNullOrEmpty(copy.PortraitPng)) copy.PortraitPng = previous.PortraitPng;
+                if (string.IsNullOrEmpty(copy.Inscription)) copy.Inscription = previous.Inscription;
             }
             archive[r.Id] = copy; archiveDirty = true;
             FlushArchive(); // persist immediately before a user can revert or quickload
         }
         private void FlushArchive()
         {
-            if (!archiveLoaded || !archiveDirty || saveFolder != HighLogic.SaveFolder) return;
+            if (!archiveLoaded || !archiveDirty || saveFolder != HighLogic.SaveFolder || KrashIntegration.IsSimulationActive) return;
             try { Persistence.SaveArchive(archive.Values); archiveDirty = false; Error = null; }
             catch (Exception e) { Error = "Cannot save casualty archive: " + e.Message; Debug.LogWarning("[KerbalMemorial] " + Error); }
             nextWrite = Time.realtimeSinceStartup + 5f;
@@ -350,7 +395,7 @@ namespace KerbalMemorial
         }
         internal bool IsLive(Casualty r) => Live.Records.Any(x => x.Id == r.Id);
         internal void EditNote(Casualty r, string note)
-        { if (r.Notes == note) return; r.Notes = note; if (IsLive(r)) Changed(r); else if (Permanent) { archiveDirty = true; FlushArchive(); } }
+        { if (KrashIntegration.IsSimulationActive || r.Notes == note) return; r.Notes = note; if (IsLive(r)) Changed(r); else if (Permanent) { archiveDirty = true; FlushArchive(); } }
     }
     public static class MemorialAPI
     {

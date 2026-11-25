@@ -58,12 +58,16 @@
       <DependentUpon>AssemblyVersion.tt</DependentUpon>
     </Compile>
     <Compile Include="CasualtyTracker.cs" />
+    <Compile Include="KrashIntegration.cs" />
     <Compile Include="InstallChecker.cs" />
     <Compile Include="Ledger.cs" />
+    <Compile Include="Inscriptions.cs" />
     <Compile Include="EditorAccidentSign.cs" />
     <Compile Include="SafetySignArtwork.cs" />
     <Compile Include="MemorialWindow.cs" />
     <Compile Include="MemorialWallWindow.cs" />
+    <Compile Include="PlaqueInfoWindow.cs" />
+    <Compile Include="IndividualPlaqueWindow.cs" />
     <Compile Include="Persistence.cs" />
     <Compile Include="PortraitCache.cs" />
     <Compile Include="PortraitQuality.cs" />
@@ -95,6 +99,19 @@
     <EmbeddedResource Include="Artwork\WallPlaque.png">
       <LogicalName>KerbalMemorial.Artwork.WallPlaque.png</LogicalName>
     </EmbeddedResource>
+    <EmbeddedResource Include="Artwork\AltWallFull.png">
+      <LogicalName>KerbalMemorial.Artwork.AltWallFull.png</LogicalName>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Artwork\AltWallPlaque.png">
+      <LogicalName>KerbalMemorial.Artwork.AltWallPlaque.png</LogicalName>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Artwork\IndividualClassic.png">
+      <LogicalName>KerbalMemorial.Artwork.IndividualClassic.png</LogicalName>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Artwork\IndividualAlternate.png">
+      <LogicalName>KerbalMemorial.Artwork.IndividualAlternate.png</LogicalName>
+    </EmbeddedResource>
+    <None Include="Artwork\generate_individual_plaque.py" />
   </ItemGroup>
   <ItemGroup>
     <Content Include="AssemblyVersion.tt">

@@ -10,7 +10,7 @@ namespace KerbalMemorial
         public string Id = Guid.NewGuid().ToString("N");
         public string Name = "", OriginalName = "", Trait = "", Gender = "", CrewType = "", Level = "";
         public string Status = "Missing", Cause = "Unknown", Confidence = "Unknown", Source = "", Notes = "", History = "";
-        public string PortraitPng = "";
+        public string PortraitPng = "", Inscription = "";
         public double UT = -1, DeathUT = -1, ReturnUT = -1;
         public bool ReportedKilled, Imported;
         public Context Location;

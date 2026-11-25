@@ -1,4 +1,6 @@
 using System;
+using System.Linq;
+using System.IO;
 using KerbalMemorial;
 internal static class LedgerTests
 {
@@ -76,6 +78,46 @@ internal static class LedgerTests
         Check(!PortraitQuality.IsUsable(stripes, 64, 64), "Alternating scanlines rejected");
         Check(PortraitQuality.IsUsable(face, 64, 64), "Coherent portrait accepted");
         Check(!PortraitQuality.IsUsable(face, 1, 64), "Bad dimensions rejected");
+        var parsed = Inscriptions.Parse(new[] { "### **Short plaque inscriptions**", "", "- **Reach for the stars.**", "2. Never forgotten.", "* Still exploring.", "---", "### Another heading", "A plain line." }).ToArray();
+        Check(parsed.SequenceEqual(new[] { "Reach for the stars.", "Never forgotten.", "Still exploring.", "A plain line." }), "Inscription parser skips headings and list formatting");
+        var loss = new Casualty { Status = "Missing", Notes = "Old note" };
+        int picks = 0;
+        Func<string> choose = () => { picks++; return "Among the stars."; };
+        Check(!Inscriptions.Assign(loss, choose) && picks == 0, "No inscription for unconfirmed missing crew");
+        loss.ReportedKilled = true;
+        Check(Inscriptions.Assign(loss, choose) && picks == 1, "Assign at first fatality confirmation");
+        Check(!Inscriptions.Assign(loss, choose) && picks == 1, "Duplicate death does not reselect");
+        Check(!Inscriptions.Assign(loss, choose) && picks == 1, "Existing inscription never replaced");
+        Check(Inscriptions.Display(loss) == "Among the stars." && loss.Notes == "Old note", "Inscription independent of notes");
+        Check(Inscriptions.Display(new Casualty { Notes = "Legacy text" }) == "Legacy text", "Legacy note remains visible");
+        Check(loss.Copy().Inscription == loss.Inscription, "Archive copy retains inscription");
+        var imported = new Casualty { Status = "Dead", Imported = true, UT = -1 };
+        Check(Inscriptions.Assign(imported, choose), "Historical imports receive inscriptions");
+        Check(!Inscriptions.Assign(imported, choose), "Backfill is idempotent");
+        var legacy = new Casualty { Status = "Dead", ReturnUT = 100, Inscription = " " };
+        Check(Inscriptions.Assign(legacy, choose), "Previously respawned fatality receives inscription");
+        var current = new Casualty { Status = "Dead" };
+        var archived = new Casualty { Status = "Dead", Inscription = "Existing archive message" };
+        Check(!Inscriptions.FillPair(current, archived, () => { throw new Exception("Unexpected pick"); }) && current.Inscription == archived.Inscription, "Restore archived inscription without reselection");
+        archived.Inscription = "";
+        Check(Inscriptions.FillPair(current, archived, () => { throw new Exception("Unexpected pick"); }) && archived.Inscription == current.Inscription, "Fill archive from current record");
+        current.Inscription = archived.Inscription = "";
+        int batchPicks = 0;
+        Check(Inscriptions.FillPair(current, archived, () => { batchPicks++; return "Shared message"; }) && batchPicks == 1 && current.Inscription == archived.Inscription, "One selection for both copies");
+        var retry = new Casualty { Status = "Dead" };
+        Check(!Inscriptions.Assign(retry, () => "") && Inscriptions.Assign(retry, choose), "Retry after empty pool");
+        Check(!Inscriptions.Assign(new Casualty { Status = "Dead" }, () => ""), "Empty pool does not assign");
+        string directory = Path.Combine(Path.GetTempPath(), "KerbalMemorial-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            Check(Inscriptions.Pick(directory) == "", "Missing directory is safe");
+            Directory.CreateDirectory(directory);
+            File.WriteAllLines(Path.Combine(directory, "a.txt"), new[] { "### **Short plaque inscriptions**", "- First message" });
+            File.WriteAllLines(Path.Combine(directory, "b.TXT"), new[] { "### **Other inscriptions**", "1. Second message" });
+            File.WriteAllText(Path.Combine(directory, "README.md"), "Not an inscription");
+            Check(Enumerable.Range(0, 20).All(i => new[] { "First message", "Second message" }.Contains(Inscriptions.Pick(directory))), "Only valid text file messages selected");
+        }
+        finally { if (Directory.Exists(directory)) Directory.Delete(directory, true); }
         Console.WriteLine(count + " assertions passed");
     }
 }

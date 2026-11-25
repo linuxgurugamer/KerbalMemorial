@@ -16,13 +16,13 @@ namespace KerbalMemorial
     [KSPAddon(KSPAddon.Startup.EveryScene, false)]
     public sealed class MemorialWindow : MonoBehaviour
     {
-        private static ToolbarControl toolbar;
-        private bool open, hidden, subscribed, resizing;
+        private static ToolbarControl toolbarController;
+        private bool open, openMainRequested, hidden, paused, subscribed, resizing, showFullDetails;
         private readonly SignSettingsWindow signSettings = new SignSettingsWindow();
         private readonly MemorialWallWindow wall = new MemorialWallWindow();
         private Rect rect = new Rect(100, 80, 780, 580);
         private static Rect lastRect = new Rect(100, 80, 780, 580);
-        private Vector2 listScroll, detailScroll, statsScroll, resizeDelta;
+        private Vector2 listScroll, detailScroll, statsScroll, settingsScroll, resizeDelta;
         private int tab, filter;
         private string search = "", selected = "", message = "";
         private GUIStyle wrap, incidentStyle;
@@ -31,30 +31,70 @@ namespace KerbalMemorial
         private static readonly string[] Filters = { "All", "Fatal", "Missing", "Respawned", "Returned", "Archived" };
         public void Start()
         {
-            if (toolbar != null ||
+            if (toolbarController != null ||
                 (!HighLogic.LoadedSceneIsFlight && !HighLogic.LoadedSceneIsEditor && HighLogic.LoadedScene != GameScenes.SPACECENTER && HighLogic.LoadedScene != GameScenes.TRACKSTATION))
                 return;
             rect = lastRect;
-            toolbar = gameObject.AddComponent<ToolbarControl>();
-            toolbar.AddToAllToolbars(() => open = true, () => { open = false; resizing = false; signSettings.Close(); wall.Close(); ReleasePortrait(); },
+            toolbarController = gameObject.AddComponent<ToolbarControl>();
+            toolbarController.AddToAllToolbars(wall.Open, CloseAll,
                 ApplicationLauncher.AppScenes.FLIGHT | ApplicationLauncher.AppScenes.MAPVIEW | ApplicationLauncher.AppScenes.SPACECENTER | ApplicationLauncher.AppScenes.TRACKSTATION | ApplicationLauncher.AppScenes.VAB | ApplicationLauncher.AppScenes.SPH,
-                "KerbalMemorial", "memorial", "KerbalMemorial/Textures/icon38", "KerbalMemorial/Textures/icon24", "Kerbal Memorial");
-            GameEvents.onHideUI.Add(Hide); GameEvents.onShowUI.Add(Show); subscribed = true;
+                "KerbalMemorial", "memorial", "KerbalMemorial/PluginData/Textures/icon38", "KerbalMemorial/PluginData/Textures/icon24", "Kerbal Memorial");
+            GameEvents.onHideUI.Add(Hide); GameEvents.onShowUI.Add(Show);
+            GameEvents.onGamePause.Add(OnPause); GameEvents.onGameUnpause.Add(OnUnpause);
+            subscribed = true;
         }
-        private void Hide() { hidden = true; resizing = false; wall.Hide(); }
+        private void CancelResize() { resizing = false; resizeDelta = Vector2.zero; wall.Hide(); }
+        private void Hide() { hidden = true; CancelResize(); }
         private void Show() { hidden = false; }
+        // Pause and F2 are independent: resuming one must not clear the other.
+        // Keep all open/selection/scroll state intact while drawing is suspended.
+        private void OnPause() { paused = true; CancelResize(); }
+        private void OnUnpause() { paused = false; }
         public void OnDestroy()
         {
-            wall.Close();
-            ReleasePortrait();
-            if (subscribed) { GameEvents.onHideUI.Remove(Hide); GameEvents.onShowUI.Remove(Show); }
-            if (toolbar != null) { toolbar.OnDestroy(); Destroy(toolbar); }
+            CloseAll();
+            if (subscribed)
+            {
+                GameEvents.onHideUI.Remove(Hide); GameEvents.onShowUI.Remove(Show);
+                GameEvents.onGamePause.Remove(OnPause); GameEvents.onGameUnpause.Remove(OnUnpause);
+                subscribed = false;
+            }
+            if (toolbarController != null) { toolbarController.OnDestroy(); Destroy(toolbarController); }
         }
-        private void Close() { open = false; resizing = false; signSettings.Close(); wall.Close(); ReleasePortrait(); if (toolbar != null) toolbar.SetFalse(false); }
+        // The wall is the toolbar's root window. The main ledger is optional.
+        private void RequestMainWindow() { openMainRequested = true; }
+        private void CloseMain()
+        {
+            open = false; openMainRequested = false; resizing = false; resizeDelta = Vector2.zero;
+            signSettings.Close(); ReleasePortrait();
+        }
+        private void CloseAll()
+        {
+            CloseMain(); wall.Close();
+        }
         public void OnGUI()
         {
-            if (!open || hidden || CasualtyTracker.Instance == null) return;
+            // All child windows are drawn through this method. Check the live
+            // flight pause state too, in case the addon starts after a pause event.
+            if (paused || (HighLogic.LoadedSceneIsFlight && FlightDriver.Pause))
+            {
+                CancelResize();
+                return;
+            }
+            if (!wall.IsOpen || hidden || CasualtyTracker.Instance == null) return;
             GUI.skin = HighLogic.Skin;
+            // Open the GUILayout-based ledger on a Layout event, not in the
+            // wall's MouseUp callback, so its first repaint has valid layout data.
+            bool bringMainToFront = openMainRequested && Event.current.type == EventType.Layout;
+            if (bringMainToFront) { openMainRequested = false; open = true; }
+            wall.OnGUI(GetInstanceID() ^ 0x4b4d5700, CasualtyTracker.Instance, RequestMainWindow);
+            if (!wall.IsOpen)
+            {
+                CloseMain();
+                if (toolbarController != null) toolbarController.SetFalse(false);
+                return;
+            }
+            if (!open) return;
             if (wrap == null) wrap = new GUIStyle(GUI.skin.label) { wordWrap = true };
             if (incidentStyle == null) incidentStyle = new GUIStyle(GUI.skin.label) { alignment = TextAnchor.UpperRight, wordWrap = true };
             rect.width = Mathf.Clamp(rect.width, Mathf.Min(550, Screen.width), Screen.width);
@@ -69,8 +109,8 @@ namespace KerbalMemorial
                 resizeDelta = Vector2.zero;
             }
             lastRect = rect;
+            if (open && bringMainToFront) GUI.BringWindowToFront(GetInstanceID());
             if (open) signSettings.OnGUI(GetInstanceID() ^ 0x4b4d5300);
-            if (open) wall.OnGUI(GetInstanceID() ^ 0x4b4d5700, CasualtyTracker.Instance);
         }
         private void Draw(int id)
         {
@@ -82,10 +122,7 @@ namespace KerbalMemorial
             GUILayout.FlexibleSpace();
             GUILayout.Label("Time since last incident:\n" + IncidentElapsed(tracker), incidentStyle, GUILayout.Width(Mathf.Min(240f, rect.width * .43f)));
             GUILayout.EndHorizontal();
-            GUILayout.BeginHorizontal();
             tab = GUILayout.Toolbar(tab, new[] { "Memorial", "Statistics", "Settings / Help" });
-            if (GUILayout.Button("Memorial Wall", GUILayout.Width(130))) wall.Open(rect);
-            GUILayout.EndHorizontal();
             if (tab == 0) DrawMemorial(tracker, records);
             else if (tab == 1) DrawStats(tracker, records);
             else DrawSettings(tracker);
@@ -102,7 +139,7 @@ namespace KerbalMemorial
             }
             GUILayout.FlexibleSpace(); GUILayout.EndHorizontal();
             GUILayout.FlexibleSpace();
-            if (GUILayout.Button("Close", GUILayout.Width(100))) Close();
+            if (GUILayout.Button("Close", GUILayout.Width(100))) CloseMain();
             GUILayout.FlexibleSpace();
             GUILayout.BeginHorizontal(GUILayout.Width(footerSide));
             GUILayout.FlexibleSpace();
@@ -143,7 +180,15 @@ namespace KerbalMemorial
             var detail = filtered.FirstOrDefault(r => r.Id == selected) ?? filtered.FirstOrDefault();
             if (detail != null) { selected = detail.Id; DrawDetail(tracker, detail); }
             else { ReleasePortrait(); GUILayout.Label("Select a casualty to view details."); }
-            GUILayout.EndScrollView(); GUILayout.EndVertical(); GUILayout.EndHorizontal();
+            GUILayout.EndScrollView();
+            // Keep the toggle outside the scrolling details, always accessible.
+            // Change the layout only after drawing the current details.
+            if (detail != null && GUILayout.Button(showFullDetails ? "Hide Full Details" : "Show Full Details"))
+            {
+                showFullDetails = !showFullDetails;
+                detailScroll = Vector2.zero;
+            }
+            GUILayout.EndVertical(); GUILayout.EndHorizontal();
         }
         private bool Matches(CasualtyTracker t, Casualty r)
         {
@@ -153,15 +198,32 @@ namespace KerbalMemorial
         }
         private void DrawDetail(CasualtyTracker tracker, Casualty r)
         {
+            DrawDetailContents(tracker, r, showFullDetails, wrap, DrawPortrait);
+        }
+        // Shared by the main panel and the independently opened plaque information window.
+        internal static void DrawDetailContents(CasualtyTracker tracker, Casualty r, bool full, GUIStyle wrap, Action<Casualty> drawPortrait)
+        {
+            Action<string, string> Field = (key, val) => GUILayout.Label(key + ": " + Value(val), wrap);
             var c = r.Location ?? new Context();
             GUILayout.Label(r.Name + " — " + r.DisplayStatus, wrap);
-            DrawPortrait(r);
+            drawPortrait(r);
+            // The summary retains the portrait and only the requested text fields.
+            Field("Date fatality confirmed", Date(r.DeathUT));
+            Field("Cause", r.Cause);
+            Field("Evidence", r.Source);
+            Field("Vessel name", c.Vessel);
+            Field("Part", string.IsNullOrEmpty(c.PartTitle) ? c.Part : c.PartTitle);
+            Field("Body", c.Body);
+            if (!full) return;
+
+            GUILayout.Space(8);
+            GUILayout.Label("Additional details", wrap);
             if (r.Name != r.OriginalName) Field("Original name", r.OriginalName);
             Field("Timeline", tracker.IsLive(r) ? "Current save" : "Archived / alternate timeline");
             Field("Profession", r.Trait + " / " + r.CrewType); Field("Gender / level", r.Gender + " / " + r.Level);
-            Field("Incident", Date(r.UT)); Field("Fatality confirmed", Date(r.DeathUT)); if (r.Closed) Field("Returned", Date(r.ReturnUT));
-            Field("Cause", r.Cause + " (" + r.Confidence + ")"); Field("Evidence", r.Source);
-            Field("Vessel", c.Vessel); Field("Vessel ID", c.VesselId); Field("Part", c.PartTitle); Field("Body", c.Body); Field("Situation", c.Situation); Field("EVA", c.EVA);
+            Field("Incident", Date(r.UT)); if (r.Closed) Field("Returned", Date(r.ReturnUT));
+            Field("Cause confidence", r.Confidence);
+            Field("Vessel ID", c.VesselId); Field("Situation", c.Situation); Field("EVA", c.EVA);
             Field("Latitude / longitude", Metric(c.Latitude, "°") + " / " + Metric(c.Longitude, "°"));
             Field("Altitude", Metric(c.Altitude, " m")); Field("Surface speed", Metric(c.Speed, " m/s")); Field("G-force", Metric(c.Gee, " g")); Field("Mission elapsed time", Metric(c.MET, " s"));
             Field("Context", Value(c.Quality) + " — " + Date(c.UT));
@@ -189,7 +251,6 @@ namespace KerbalMemorial
             }
             else GUILayout.Label("Portrait unavailable (no valid saved image)", wrap);
         }
-        private void Field(string key, string val) { GUILayout.Label(key + ": " + Value(val), wrap); }
         private static string Value(string s) => string.IsNullOrEmpty(s) ? "Unknown" : s;
         private static string Metric(double n, string unit) => double.IsNaN(n) || double.IsInfinity(n) ? "Unknown" : n.ToString("N2") + unit;
         private static string Date(double ut) => ut < 0 ? "Unknown" : KSPUtil.PrintDateCompact(ut, true);
@@ -225,16 +286,21 @@ namespace KerbalMemorial
         }
         private void DrawSettings(CasualtyTracker t)
         {
+            settingsScroll = GUILayout.BeginScrollView(settingsScroll, GUILayout.ExpandHeight(true));
             GUILayout.Label("Settings are saved in the game difficulty options. Permanent mode additionally writes an archive under this save folder.", wrap);
             var s = CasualtyTracker.Options;
             s.permanentHistory = GUILayout.Toggle(s.permanentHistory, "Keep incidents across quickloads and reverts");
             s.notifications = GUILayout.Toggle(s.notifications, "Show casualty notifications");
             s.importExisting = GUILayout.Toggle(s.importExisting, "Import previously dead or missing Kerbals");
+            GUILayout.Space(8);
+            GUILayout.Label("Memorial Wall Theme", wrap);
+            s.alternateWallTheme = GUILayout.Toolbar(s.alternateWallTheme ? 1 : 0, new[] { "Classic", "Alternate" }) == 1;
+            s.hideWallThemeButton = GUILayout.Toggle(s.hideWallThemeButton, "Hide theme button on memorial wall");
             GUILayout.Space(10);
             GUILayout.Label("Missing is not automatically a fatality. An explicit crew-killed event or Dead status confirms a death. A confirmed fatality remains counted if a Kerbal respawns. Ordinary returns from MIA are not fatalities. Archived incidents do not alter gameplay. Context and inferred causes are best effort; unknown values are not fabricated.", wrap);
             GUILayout.Label("CSV exports all currently visible history (not just the search results).", wrap);
             if (GUILayout.Button("Accident Sign Settings", GUILayout.Width(190))) signSettings.Open(rect);
-            GUILayout.FlexibleSpace();
+            GUILayout.EndScrollView();
         }
     }
 }
