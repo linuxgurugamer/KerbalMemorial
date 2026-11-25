@@ -1,3 +1,8 @@
+# 0.1.0.30
+- Add stock-event classifications for overheating, excessive G-force/pressure, water impact, vessel collisions, structural failure, aerodynamic breakup, EVA accidents and unloaded-vessel terrain impacts.
+- Correlate evidence by crew, part/vessel and a short real-time and game-time window; prioritize specific evidence and retain external API causes.
+- Joint-break aerodynamic classification uses a probable 10 kPa dynamic-pressure heuristic; ambiguous collision reports remain generic collisions.
+
 # 0.1.0.29
 - Open the Memorial Wall first from either toolbar. Add a Kerbal Memorial button to the wall footer and remove the Memorial Wall button from the main window.
 - Closing the main window leaves the wall open; closing the wall or toggling the toolbar off closes all associated windows.

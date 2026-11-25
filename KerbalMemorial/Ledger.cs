@@ -12,7 +12,7 @@ namespace KerbalMemorial
         public string Status = "Missing", Cause = "Unknown", Confidence = "Unknown", Source = "", Notes = "", History = "";
         public string PortraitPng = "", Inscription = "";
         public double UT = -1, DeathUT = -1, ReturnUT = -1;
-        public bool ReportedKilled, Imported;
+        public bool ReportedKilled, Imported, ExternalCause;
         public Context Location;
         public bool Closed { get { return ReturnUT >= 0; } }
         public bool Fatal { get { return ReportedKilled || Status == "Dead"; } }
@@ -88,6 +88,84 @@ namespace KerbalMemorial
         {
             if (r == null || string.IsNullOrEmpty(cause) || cause == "Unknown") return;
             if (ConfidenceRank(confidence) > ConfidenceRank(r.Confidence)) { r.Cause = cause; r.Confidence = confidence; r.Source = source; }
+        }
+        // Stock evidence is more useful when a specific failure replaces a
+        // generic destruction report at the same confidence level.
+        public static int CauseSpecificity(string cause)
+        {
+            switch (cause)
+            {
+                case "Overheating": case "EVA overheating":
+                case "Excessive G-force (structural failure)": case "Excessive pressure":
+                case "Vessel terminated": return 50;
+                case "Unloaded vessel terrain impact": return 45;
+                case "Water impact": case "EVA water impact": return 40;
+                case "Ground impact": case "EVA ground impact": return 35;
+                case "Vessel collision": case "EVA collision": return 30;
+                case "Aerodynamic breakup": return 25;
+                case "Structural failure": return 20;
+                case "Collision": case "Left for dead": return 15;
+                case "EVA accident — unknown cause": return 12;
+                case "Crash": return 10;
+                case "Part destroyed": return 5;
+                default: return 0;
+            }
+        }
+        public static bool PreferCause(string candidate, string confidence, string existing, string existingConfidence)
+        {
+            if (string.IsNullOrEmpty(candidate) || candidate == "Unknown") return false;
+            int c = ConfidenceRank(confidence), e = ConfidenceRank(existingConfidence);
+            // A legacy/custom confirmed cause that isn't one of our stock labels
+            // should never be displaced by a new stock hint.
+            if (existingConfidence == "Confirmed" && CauseSpecificity(existing) == 0) return false;
+            return c > e || (c == e && CauseSpecificity(candidate) > CauseSpecificity(existing));
+        }
+        public static string EvaCause(string cause, bool eva)
+        {
+            if (!eva) return cause;
+            switch (cause)
+            {
+                case "Ground impact": case "Unloaded vessel terrain impact": return "EVA ground impact";
+                case "Collision": case "Vessel collision": return "EVA collision";
+                case "Overheating": return "EVA overheating";
+                case "Water impact": return "EVA water impact";
+                default: return cause;
+            }
+        }
+        // Joint destruction can also be intentional. Require a positive force;
+        // 10 kPa is a heuristic, not a stock aerodynamic failure threshold.
+        public static string JointCause(double force, double pressure, bool airborne)
+        {
+            if (double.IsNaN(force) || double.IsInfinity(force) || force <= 0) return "Unknown";
+            return airborne && !double.IsNaN(pressure) && !double.IsInfinity(pressure) && pressure >= 10.0
+                ? "Aerodynamic breakup" : "Structural failure";
+        }
+        public static bool EvidenceInWindow(double eventUT, double nowUT, double realAge)
+        {
+            return eventUT >= 0 && nowUT >= eventUT && nowUT - eventUT <= 5.0 && realAge >= 0 && realAge <= 5.0;
+        }
+        public static bool SameContext(Context a, Context b)
+        {
+            if (a == null || b == null) return true;
+            if (!string.IsNullOrEmpty(a.VesselId) && !string.IsNullOrEmpty(b.VesselId) && a.VesselId != b.VesselId) return false;
+            return string.IsNullOrEmpty(a.PartId) || string.IsNullOrEmpty(b.PartId) || a.PartId == b.PartId;
+        }
+        public static bool IsStockEvidence(string source)
+        {
+            if (string.IsNullOrEmpty(source)) return false;
+            if (source == "Ground collision event" || source == "Tracking Station termination") return true;
+            foreach (string name in new[] { "onOverheat", "onOverG", "onOverPressure", "onCrashSplashdown", "onCollision", "onPartFailure", "onPartJointBreak", "onVesselExplodeGroundCollision", "onPartExplodeGroundCollision", "onPartDie", "onCrash" })
+                if (source == name || source.StartsWith(name + ":", StringComparison.Ordinal) || source.StartsWith(name + ";", StringComparison.Ordinal) || source.StartsWith(name + " (", StringComparison.Ordinal) || source.StartsWith(name + " | ", StringComparison.Ordinal)) return true;
+            return source.StartsWith("Tracking Station termination | ", StringComparison.Ordinal);
+        }
+        public static string MergeEvidence(string first, string second)
+        {
+            if (string.IsNullOrEmpty(first)) return second ?? "";
+            if (string.IsNullOrEmpty(second)) return first;
+            var lines = first.Split(new[] { " | " }, StringSplitOptions.None).ToList();
+            foreach (string item in second.Split(new[] { " | " }, StringSplitOptions.None))
+                if (!lines.Contains(item) && lines.Count < 8) lines.Add(item);
+            return string.Join(" | ", lines);
         }
         public static string Csv(string value) { return "\"" + (value ?? "").Replace("\"", "\"\"") + "\""; }
         public static string Number(double n) { return double.IsNaN(n) || double.IsInfinity(n) ? "" : n.ToString("R", CultureInfo.InvariantCulture); }

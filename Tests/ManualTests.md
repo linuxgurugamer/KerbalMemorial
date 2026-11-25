@@ -101,3 +101,12 @@ Use a disposable save, with and without Missing Crew Respawn enabled. Back up th
 ## Wall-first navigation (0.1.0.29)
 - Click either toolbar icon: only the Memorial Wall opens. Click Kerbal Memorial in its footer: the main ledger opens, with no Memorial Wall button beside its tabs. Verify the wall remains open and the toolbar stays active. Close the ledger; verify the wall and its plaque windows remain open and the ledger’s Sign Settings window closes. Reopen the ledger from the wall; verify its previous position is retained.
 - Open the ledger, Sign Settings and a wall plaque with Details. Close the wall: all associated windows close and the toolbar turns off. Repeat by toggling the toolbar off. Toggle on again: only the wall opens. Verify the wall works with an empty ledger, both themes, hidden theme button, pause/F2 and scene changes.
+
+## Stock cause classification (0.1.0.30)
+- Overheat an occupied part; verify overheating and temperature evidence, and that generic part destruction does not replace it. Repeat in EVA.
+- Enable stock part G/pressure limits and exceed them on an occupied part; verify respective failure classifications only if a casualty occurs.
+- Test fatal splashdown, ground impact and vessel collisions (including EVA); ambiguous collision targets must remain generic.
+- Break an occupied part joint under high dynamic pressure and at low pressure, with a casualty; verify probable aerodynamic breakup or structural failure respectively. Ordinary staging without a casualty must not add records.
+- Allow an unloaded crewed vessel to hit terrain; verify unloaded terrain impact and preserved proto-part details.
+- Test deaths with only EVA context and without context; verify unknown-cause EVA and ordinary unknown fallbacks.
+- Trigger evidence on an unoccupied or unrelated part and verify no unrelated death is reclassified. Confirm explicit wrapper reports remain authoritative. Repeat tests in KRASH with permanent history on; verify no casualties or evidence leaks.

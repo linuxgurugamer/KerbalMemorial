@@ -118,6 +118,36 @@ internal static class LedgerTests
             Check(Enumerable.Range(0, 20).All(i => new[] { "First message", "Second message" }.Contains(Inscriptions.Pick(directory))), "Only valid text file messages selected");
         }
         finally { if (Directory.Exists(directory)) Directory.Delete(directory, true); }
+        Check(Ledger.PreferCause("Overheating", "Confirmed", "Part destroyed", "Probable"), "Overheat overrides generic destruction");
+        Check(!Ledger.PreferCause("Part destroyed", "Probable", "Overheating", "Confirmed"), "Generic destruction cannot replace overheat");
+        Check(Ledger.PreferCause("Vessel collision", "Probable", "Crash", "Probable"), "Specific cause wins confidence tie");
+        Check(!Ledger.PreferCause("Aerodynamic breakup", "Probable", "Ground impact", "Confirmed"), "Probable breakup cannot replace confirmed ground impact");
+        Check(Ledger.PreferCause("Unloaded vessel terrain impact", "Confirmed", "Ground impact", "Confirmed"), "Unloaded impact is more specific");
+        Check(!Ledger.PreferCause("Overheating", "Confirmed", "Life support failure", "Confirmed"), "Legacy confirmed custom cause protected");
+        Check(Ledger.EvaCause("Ground impact", true) == "EVA ground impact", "EVA ground impact");
+        Check(Ledger.EvaCause("Vessel collision", true) == "EVA collision", "EVA vessel collision");
+        Check(Ledger.EvaCause("Collision", true) == "EVA collision", "EVA generic collision");
+        Check(Ledger.EvaCause("Overheating", true) == "EVA overheating", "EVA heat");
+        Check(Ledger.EvaCause("Water impact", true) == "EVA water impact", "EVA water");
+        Check(Ledger.EvaCause("Overheating", false) == "Overheating", "Non-EVA unchanged");
+        Check(Ledger.JointCause(100, 10, true) == "Aerodynamic breakup", "Airborne high pressure break");
+        Check(Ledger.JointCause(100, 9.9, true) == "Structural failure", "Low pressure break");
+        Check(Ledger.JointCause(100, 20, false) == "Structural failure", "Ground joint break not aerodynamic");
+        Check(Ledger.JointCause(0, 20, true) == "Unknown", "No force joint removal ignored");
+        Check(Ledger.JointCause(double.NaN, 20, true) == "Unknown", "Invalid force ignored");
+        Check(Ledger.EvidenceInWindow(100, 105, 5), "Boundary evidence fresh");
+        Check(!Ledger.EvidenceInWindow(100, 106, 1), "Game-time stale evidence ignored");
+        Check(!Ledger.EvidenceInWindow(100, 101, 6), "Real-time stale evidence ignored");
+        Check(!Ledger.EvidenceInWindow(100, 99, 1), "Reverted timeline evidence ignored");
+        var contextA = new Context { VesselId = "A", PartId = "1" };
+        Check(!Ledger.SameContext(contextA, new Context { VesselId = "B", PartId = "1" }), "Unrelated vessel rejected");
+        Check(!Ledger.SameContext(contextA, new Context { VesselId = "A", PartId = "2" }), "Unrelated part rejected");
+        Check(Ledger.SameContext(contextA, new Context { VesselId = "A" }), "Vessel-wide evidence accepted");
+        Check(Ledger.MergeEvidence("onOverheat", "onPartDie") == "onOverheat | onPartDie", "Retain corroborating evidence");
+        Check(Ledger.MergeEvidence("onOverheat | onPartDie", "onPartDie") == "onOverheat | onPartDie", "Deduplicate evidence");
+        Check(Ledger.IsStockEvidence("onOverheat: part overheated | onPartDie"), "Recognize stock evidence");
+        Check(!Ledger.IsStockEvidence("OtherMod"), "External source not stock");
+        Check(new Casualty { ExternalCause = true }.Copy().ExternalCause, "Archive copy retains external cause flag");
         Console.WriteLine(count + " assertions passed");
     }
 }
