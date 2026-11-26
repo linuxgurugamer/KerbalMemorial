@@ -58,6 +58,8 @@
       <DependentUpon>AssemblyVersion.tt</DependentUpon>
     </Compile>
     <Compile Include="CasualtyTracker.cs" />
+    <Compile Include="FatalityPlaqueQueue.cs" />
+    <Compile Include="FlightResultsGate.cs" />
     <Compile Include="KrashIntegration.cs" />
     <Compile Include="InstallChecker.cs" />
     <Compile Include="Ledger.cs" />

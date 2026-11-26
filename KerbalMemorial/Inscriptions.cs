@@ -1,10 +1,58 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Text.RegularExpressions;
 
 namespace KerbalMemorial
 {
+    // One shuffle cycle per status. Keep used messages even if a file is
+    // temporarily removed, or the associated missing crew member returns.
+    internal sealed class InscriptionCycle
+    {
+        internal readonly HashSet<string> Used = new HashSet<string>(StringComparer.Ordinal);
+        internal bool Initialized { get; private set; }
+        internal void Restore(IEnumerable<string> used)
+        {
+            Used.Clear();
+            foreach (string message in used)
+                if (!string.IsNullOrWhiteSpace(message)) Used.Add(message);
+            Initialized = true;
+        }
+        internal void Seed(IEnumerable<string> existing)
+        {
+            if (!Initialized) Restore(existing);
+        }
+        internal string Pick(IEnumerable<string> messages)
+        {
+            var pool = messages.Where(m => !string.IsNullOrWhiteSpace(m)).Distinct(StringComparer.Ordinal).ToList();
+            if (pool.Count == 0) return ""; // Do not reset on an empty folder.
+            var unused = pool.Where(m => !Used.Contains(m)).ToList();
+            if (unused.Count == 0) { Used.Clear(); unused = pool; }
+            string chosen = Inscriptions.Pick(unused);
+            Used.Add(chosen);
+            Initialized = true;
+            return chosen;
+        }
+    }
+
+    internal sealed class InscriptionCycles
+    {
+        internal readonly InscriptionCycle Deceased = new InscriptionCycle();
+        internal readonly InscriptionCycle Missing = new InscriptionCycle();
+        internal InscriptionCycle For(bool missing) => missing ? Missing : Deceased;
+        internal void Seed(IEnumerable<Casualty> records)
+        {
+            Deceased.Seed(records.Select(Inscriptions.FatalMessage));
+            Missing.Seed(records.Select(Inscriptions.SavedMissingMessage));
+        }
+        internal void CopyFrom(InscriptionCycles other)
+        {
+            if (other.Deceased.Initialized) Deceased.Restore(other.Deceased.Used);
+            if (other.Missing.Initialized) Missing.Restore(other.Missing.Used);
+        }
+    }
+
     // No Unity dependencies: this parser and the assignment guard can be tested offline.
     internal static class Inscriptions
     {
@@ -49,6 +97,10 @@ namespace KerbalMemorial
             return messages;
         }
 
+        // Do not mix the two pools, or read old files in the parent directory.
+        internal static List<string> ReadStatusPool(string root, bool missing, Action<string> warning = null)
+        { return ReadPool(Path.Combine(root, missing ? "Missing" : "Deceased"), warning); }
+
         internal static string Pick(string directory, Action<string> warning = null)
         { return Pick(ReadPool(directory, warning)); }
 
@@ -56,30 +108,102 @@ namespace KerbalMemorial
         { return messages == null || messages.Count == 0 ? "" : messages[random.Next(messages.Count)]; }
 
 
-        // Any confirmed fatality without an inscription is eligible, including
-        // historical imports and respawned crew. Never replace an existing message.
-        internal static bool Assign(Casualty record, Func<string> pick)
+        internal const string MissingMessage = "Missing, but not forgotten";
+
+        private static bool IsMissing(Casualty record)
+        { return record != null && !record.Fatal && !record.Closed && record.Status == "Missing"; }
+
+        // Only reuse a message saved for the same kind of casualty. The new
+        // flag distinguishes a real random missing inscription from the old
+        // fixed fallback, even if the file contains exactly the same words.
+        internal static string FatalMessage(Casualty record)
+        { return record != null && record.Fatal && !record.InscriptionForMissing && !record.InscriptionFromMissingPool ? record.Inscription : null; }
+
+        internal static string SavedMissingMessage(Casualty record)
+        { return IsMissing(record) && record.InscriptionForMissing && record.InscriptionFromMissingPool ? record.Inscription : null; }
+
+        internal static bool NeedsMessage(Casualty record)
         {
-            if (record == null || !record.Fatal || !string.IsNullOrWhiteSpace(record.Inscription) || pick == null) return false;
-            string message = pick();
-            if (string.IsNullOrWhiteSpace(message)) return false;
-            record.Inscription = message;
+            if (record == null) return false;
+            if (IsMissing(record)) return string.IsNullOrWhiteSpace(SavedMissingMessage(record));
+            return record.InscriptionForMissing || record.InscriptionFromMissingPool || (record.Fatal && string.IsNullOrWhiteSpace(record.Inscription));
+        }
+
+        internal static bool Assign(Casualty record, Func<string> pick, Func<string> pickMissing = null)
+        {
+            if (!NeedsMessage(record)) return false;
+            if (IsMissing(record))
+            {
+                string message = pickMissing?.Invoke();
+                bool fromPool = !string.IsNullOrWhiteSpace(message);
+                if (!fromPool) message = MissingMessage;
+                bool updated = record.Inscription != message || !record.InscriptionForMissing || record.InscriptionFromMissingPool != fromPool;
+                record.Inscription = message;
+                record.InscriptionForMissing = true;
+                record.InscriptionFromMissingPool = fromPool;
+                return updated;
+            }
+            // Returned crew lose the temporary message; confirmed fatalities
+            // must receive a deceased inscription, never a missing inscription.
+            bool changed = record.InscriptionForMissing || record.InscriptionFromMissingPool;
+            if (changed)
+            {
+                record.Inscription = "";
+                record.InscriptionForMissing = false;
+                record.InscriptionFromMissingPool = false;
+            }
+            if (!record.Fatal || pick == null) return changed;
+            string tribute = pick();
+            if (string.IsNullOrWhiteSpace(tribute)) return changed;
+            record.Inscription = tribute;
             return true;
         }
 
-        // Reuse the inscription from the other timeline copy before choosing a new
-        // message. Return true only when the archive copy changes.
-        internal static bool FillPair(Casualty live, Casualty archived, Func<string> pick)
+        // Reuse an existing inscription from the matching timeline copy before
+        // drawing from the appropriate pool. Do not copy a fallback as a random
+        // selection, or copy an inscription across casualty status categories.
+        internal static bool AssignFrom(Casualty record, Casualty other, Func<string> pick, Func<string> pickMissing = null)
         {
-            Assign(live, () => !string.IsNullOrWhiteSpace(archived?.Inscription) ? archived.Inscription : pick?.Invoke());
-            return Assign(archived, () => !string.IsNullOrWhiteSpace(live?.Inscription) ? live.Inscription : pick?.Invoke());
+            return Assign(record,
+                () => !string.IsNullOrWhiteSpace(FatalMessage(other)) ? FatalMessage(other) : pick?.Invoke(),
+                () => !string.IsNullOrWhiteSpace(SavedMissingMessage(other)) ? SavedMissingMessage(other) : pickMissing?.Invoke());
+        }
+
+        internal static bool FillPair(Casualty live, Casualty archived, Func<string> pick, Func<string> pickMissing = null)
+        {
+            AssignFrom(live, archived, pick, pickMissing);
+            return AssignFrom(archived, live, pick, pickMissing);
+        }
+
+        // Operate on actual ledger records, not UI copies. An archive, when
+        // enabled, shares existing inscriptions with matching live records.
+        // Return true if an archive record changed and needs to be persisted.
+        internal static bool Backfill(IEnumerable<Casualty> live, IDictionary<string, Casualty> archive, Func<string> pick, Func<string> pickMissing = null)
+        {
+            bool archiveChanged = false;
+            var liveIds = archive == null ? null : new HashSet<string>();
+            foreach (var record in live)
+            {
+                Casualty archived = null;
+                if (archive != null)
+                {
+                    liveIds.Add(record.Id);
+                    archive.TryGetValue(record.Id, out archived);
+                }
+                if (FillPair(record, archived, pick, pickMissing)) archiveChanged = true;
+            }
+            if (archive != null)
+                foreach (var record in archive.Values)
+                    if (!liveIds.Contains(record.Id) && Assign(record, pick, pickMissing)) archiveChanged = true;
+            return archiveChanged;
         }
 
         internal static string Display(Casualty record)
         {
             if (record == null) return "";
-            // Preserve the original notes-based display for older records.
-            return string.IsNullOrWhiteSpace(record.Inscription) ? (record.Notes ?? "") : record.Inscription;
+            if (IsMissing(record)) return string.IsNullOrWhiteSpace(SavedMissingMessage(record)) ? MissingMessage : record.Inscription;
+            // Preserve the original notes-based display if a fatality message is unavailable.
+            return record.InscriptionForMissing || record.InscriptionFromMissingPool || string.IsNullOrWhiteSpace(record.Inscription) ? (record.Notes ?? "") : record.Inscription;
         }
     }
 }

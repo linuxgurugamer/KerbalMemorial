@@ -16,5 +16,3 @@ The project expects `KSP_x64_Data/Managed` and the usual CKAN dependency paths. 
 ## Tests
 
 `dotnet run --project Tests/LedgerTests.csproj` on a Windows .NET 4.8 development environment tests the pure ledger. The tests and the plugin require compilation locally; the distributed source was not compiled or run in KSP. See `Tests/ManualTests.md` for in-game verification.
-
-

@@ -83,13 +83,14 @@ internal static class LedgerTests
         var loss = new Casualty { Status = "Missing", Notes = "Old note" };
         int picks = 0;
         Func<string> choose = () => { picks++; return "Among the stars."; };
-        Check(!Inscriptions.Assign(loss, choose) && picks == 0, "No inscription for unconfirmed missing crew");
+        Check(Inscriptions.Assign(loss, choose) && picks == 0 && loss.Inscription == Inscriptions.MissingMessage && loss.InscriptionForMissing, "Missing crew get fixed inscription without a random pick");
+        Check(!Inscriptions.Assign(loss, choose) && picks == 0, "Missing inscription remains stable");
         loss.ReportedKilled = true;
         Check(Inscriptions.Assign(loss, choose) && picks == 1, "Assign at first fatality confirmation");
         Check(!Inscriptions.Assign(loss, choose) && picks == 1, "Duplicate death does not reselect");
         Check(!Inscriptions.Assign(loss, choose) && picks == 1, "Existing inscription never replaced");
         Check(Inscriptions.Display(loss) == "Among the stars." && loss.Notes == "Old note", "Inscription independent of notes");
-        Check(Inscriptions.Display(new Casualty { Notes = "Legacy text" }) == "Legacy text", "Legacy note remains visible");
+        Check(Inscriptions.Display(new Casualty { Status = "Dead", Notes = "Legacy text" }) == "Legacy text", "Legacy note remains visible");
         Check(loss.Copy().Inscription == loss.Inscription, "Archive copy retains inscription");
         var imported = new Casualty { Status = "Dead", Imported = true, UT = -1 };
         Check(Inscriptions.Assign(imported, choose), "Historical imports receive inscriptions");
@@ -107,6 +108,72 @@ internal static class LedgerTests
         var retry = new Casualty { Status = "Dead" };
         Check(!Inscriptions.Assign(retry, () => "") && Inscriptions.Assign(retry, choose), "Retry after empty pool");
         Check(!Inscriptions.Assign(new Casualty { Status = "Dead" }, () => ""), "Empty pool does not assign");
+        var loadedDead = new Casualty { Status = "Dead", Imported = true };
+        var loadedRespawned = new Casualty { Status = "Dead", ReturnUT = 100, Inscription = "  " };
+        var loadedMissing = new Casualty { Status = "Missing" };
+        var loadedExisting = new Casualty { Status = "Dead", Inscription = "Keep this" };
+        var loadedReported = new Casualty { Status = "Missing", ReportedKilled = true };
+        var oldArchive = loadedDead.Copy(); oldArchive.Inscription = "Saved archive message";
+        var archiveOnly = new Casualty { Status = "Dead" };
+        var pairedRespawned = loadedRespawned.Copy();
+        var loaded = new[] { loadedDead, loadedRespawned, loadedMissing, loadedExisting, loadedReported };
+        var loadedArchive = new System.Collections.Generic.Dictionary<string, Casualty>
+        { { oldArchive.Id, oldArchive }, { archiveOnly.Id, archiveOnly }, { pairedRespawned.Id, pairedRespawned } };
+        int loadPicks = 0;
+        Func<string> loadPick = () => { loadPicks++; return "Load message " + loadPicks; };
+        Check(Inscriptions.Backfill(loaded, loadedArchive, loadPick), "Loaded list marks changed archive for saving");
+        Check(loadedDead.Inscription == oldArchive.Inscription && loadedDead.Inscription == "Saved archive message", "Loaded death recovers saved archive inscription");
+        Check(loadedRespawned.Inscription == pairedRespawned.Inscription && !string.IsNullOrWhiteSpace(loadedRespawned.Inscription), "Loaded respawned death receives shared inscription");
+        Check(loadedMissing.Inscription == Inscriptions.MissingMessage && loadedExisting.Inscription == "Keep this", "Load assigns missing message and preserves fatality inscriptions");
+        Check(!string.IsNullOrWhiteSpace(loadedReported.Inscription) && !string.IsNullOrWhiteSpace(archiveOnly.Inscription) && loadPicks == 3, "Load assigns reported and archived fatalities exactly once");
+        Check(!Inscriptions.Backfill(loaded, loadedArchive, loadPick) && loadPicks == 3, "Repeated list loads never reroll inscriptions");
+        var saveOnly = new Casualty { Status = "Dead" };
+        Check(!Inscriptions.Backfill(new[] { saveOnly }, null, () => "") && saveOnly.Inscription == "", "Empty pool is safe during list load");
+        Check(!Inscriptions.Backfill(new[] { saveOnly }, null, loadPick) && saveOnly.Inscription == "Load message 4", "Save-only list backfill updates the actual record");
+        var returned = new Casualty { Status = "Missing", Notes = "Return note" };
+        Check(Inscriptions.Assign(returned, null) && Inscriptions.Display(returned) == "Missing, but not forgotten", "Fixed message requires no pool");
+        returned.ReturnUT = 42;
+        Check(Inscriptions.Assign(returned, null) && returned.Inscription == "" && !returned.InscriptionForMissing && Inscriptions.Display(returned) == "Return note", "Returned crew lose temporary inscription");
+        var upgrading = new Casualty { Status = "Missing" };
+        Inscriptions.Assign(upgrading, null);
+        var missingArchive = upgrading.Copy();
+        upgrading.Status = "Dead";
+        Check(!Inscriptions.FillPair(upgrading, missingArchive, () => "") && upgrading.Inscription == "" && !upgrading.InscriptionForMissing, "Fatality never inherits archive missing message even with empty pool");
+        Check(Inscriptions.Assign(upgrading, () => "Final tribute") && upgrading.Inscription == "Final tribute", "Fatality retries normal assignment");
+        missingArchive.Status = "Dead";
+        Check(Inscriptions.FillPair(upgrading, missingArchive, null) && missingArchive.Inscription == "Final tribute" && !missingArchive.InscriptionForMissing, "Archive death upgrades to saved fatality inscription");
+        var archiveMissingOnly = new Casualty { Status = "Missing" };
+        var missingOnlyArchive = new System.Collections.Generic.Dictionary<string, Casualty> { { archiveMissingOnly.Id, archiveMissingOnly } };
+        Check(Inscriptions.Backfill(new Casualty[0], missingOnlyArchive, null) && archiveMissingOnly.Inscription == Inscriptions.MissingMessage, "Archive-only missing crew backfill without pool");
+        var literal = new Casualty { Status = "Dead" };
+        Check(Inscriptions.Assign(literal, () => Inscriptions.MissingMessage) && !literal.InscriptionForMissing && !Inscriptions.Assign(literal, choose), "A matching literal fatality inscription is not a temporary message");
+        int missingPicks = 0;
+        Func<string> selectMissing = () => { missingPicks++; return "Still searching."; };
+        Func<string> neverPick = () => { throw new Exception("Wrong inscription pool or unexpected reselection"); };
+        var randomMissing = new Casualty { Status = "Missing" };
+        Check(Inscriptions.Assign(randomMissing, neverPick, selectMissing) && randomMissing.InscriptionForMissing && randomMissing.InscriptionFromMissingPool && Inscriptions.Display(randomMissing) == "Still searching.", "Missing uses its own pool and displays saved message");
+        Check(!Inscriptions.Assign(randomMissing, neverPick, neverPick) && missingPicks == 1, "Saved missing inscription is stable");
+        var oldFixed = new Casualty { Status = "Missing", Inscription = Inscriptions.MissingMessage, InscriptionForMissing = true };
+        Check(Inscriptions.NeedsMessage(oldFixed) && !Inscriptions.Assign(oldFixed, neverPick, () => ""), "Old fallback waits for missing pool without changing record");
+        Check(Inscriptions.Assign(oldFixed, neverPick, selectMissing) && oldFixed.InscriptionFromMissingPool && oldFixed.Inscription == "Still searching.", "Legacy fixed missing inscription is upgraded");
+        var sameText = new Casualty { Status = "Missing" };
+        Check(Inscriptions.Assign(sameText, neverPick, () => Inscriptions.MissingMessage) && !Inscriptions.NeedsMessage(sameText), "Random selection matching fallback text does not reroll");
+        var missingLive = new Casualty { Status = "Missing" };
+        var missingCopy = missingLive.Copy();
+        int pairedPicks = 0;
+        Check(Inscriptions.FillPair(missingLive, missingCopy, neverPick, () => { pairedPicks++; return "Awaiting your return."; }) && pairedPicks == 1 && missingLive.Inscription == missingCopy.Inscription && missingCopy.InscriptionFromMissingPool, "Live and archive missing records share one selection");
+        var missingReload = new Casualty { Status = "Missing", Id = missingCopy.Id };
+        Check(!Inscriptions.FillPair(missingReload, missingCopy, neverPick, neverPick) && missingReload.Inscription == missingCopy.Inscription && missingReload.InscriptionFromMissingPool, "Restore random missing message from archive");
+        var mixedDeath = new Casualty { Status = "Dead", Id = missingLive.Id };
+        Check(!Inscriptions.FillPair(mixedDeath, missingCopy, () => "Final tribute", neverPick) && mixedDeath.Inscription == "Final tribute" && missingCopy.Inscription == "Awaiting your return.", "Different timeline statuses keep separate inscriptions");
+        randomMissing.ReportedKilled = true;
+        Check(Inscriptions.Assign(randomMissing, () => "", neverPick) && randomMissing.Inscription == "" && !randomMissing.InscriptionFromMissingPool, "Fatality clears random missing inscription even if deceased pool empty");
+        Check(Inscriptions.Assign(randomMissing, () => "Final tribute", neverPick) && randomMissing.Inscription == "Final tribute" && !randomMissing.InscriptionForMissing, "Confirmed death selects only deceased pool");
+        missingLive.ReturnUT = 42;
+        Check(Inscriptions.Assign(missingLive, neverPick, neverPick) && missingLive.Inscription == "" && !missingLive.InscriptionForMissing && !missingLive.InscriptionFromMissingPool, "Return clears random missing inscription");
+        var onlyMissing = new Casualty { Status = "Missing" };
+        var onlyMissingArchive = new System.Collections.Generic.Dictionary<string, Casualty> { { onlyMissing.Id, onlyMissing } };
+        Check(Inscriptions.Backfill(new Casualty[0], onlyMissingArchive, neverPick, selectMissing) && onlyMissing.Inscription == "Still searching.", "Archive-only missing record uses missing pool");
         string directory = Path.Combine(Path.GetTempPath(), "KerbalMemorial-" + Guid.NewGuid().ToString("N"));
         try
         {
@@ -116,6 +183,14 @@ internal static class LedgerTests
             File.WriteAllLines(Path.Combine(directory, "b.TXT"), new[] { "### **Other inscriptions**", "1. Second message" });
             File.WriteAllText(Path.Combine(directory, "README.md"), "Not an inscription");
             Check(Enumerable.Range(0, 20).All(i => new[] { "First message", "Second message" }.Contains(Inscriptions.Pick(directory))), "Only valid text file messages selected");
+            Check(Inscriptions.ReadStatusPool(directory, false).Count == 0 && Inscriptions.ReadStatusPool(directory, true).Count == 0, "Old parent files never enter either status pool");
+            Directory.CreateDirectory(Path.Combine(directory, "Deceased"));
+            Directory.CreateDirectory(Path.Combine(directory, "Missing"));
+            File.WriteAllLines(Path.Combine(directory, "Deceased", "death.txt"), new[] { "### **Deceased**", "- Final tribute" });
+            File.WriteAllLines(Path.Combine(directory, "Missing", "mia.TXT"), new[] { "### **Missing**", "- Still searching.", "1. Awaiting your return." });
+            Check(Inscriptions.ReadStatusPool(directory, false).SequenceEqual(new[] { "Final tribute" }), "Deceased pool contains only deceased messages");
+            Check(Inscriptions.ReadStatusPool(directory, true).OrderBy(x => x).SequenceEqual(new[] { "Awaiting your return.", "Still searching." }), "Missing pool contains only missing messages");
+            Check(Inscriptions.Assign(new Casualty { Status = "Missing" }, neverPick, () => Inscriptions.Pick(Inscriptions.ReadStatusPool(directory, true))), "Assignment works with actual missing files");
         }
         finally { if (Directory.Exists(directory)) Directory.Delete(directory, true); }
         Check(Ledger.PreferCause("Overheating", "Confirmed", "Part destroyed", "Probable"), "Overheat overrides generic destruction");
@@ -148,6 +223,61 @@ internal static class LedgerTests
         Check(Ledger.IsStockEvidence("onOverheat: part overheated | onPartDie"), "Recognize stock evidence");
         Check(!Ledger.IsStockEvidence("OtherMod"), "External source not stock");
         Check(new Casualty { ExternalCause = true }.Copy().ExternalCause, "Archive copy retains external cause flag");
+        var deathQueue = new FatalityPlaqueQueue();
+        Check(!deathQueue.Observe(c, false, false), "Returned MIA does not queue");
+        Check(!deathQueue.Observe(d, false, true), "Imported death does not queue");
+        Check(!deathQueue.Observe(a, true, false), "Already confirmed death does not queue");
+        Check(deathQueue.Observe(a, false, false), "New confirmation queues one plaque");
+        Check(!deathQueue.Observe(a, false, false), "Duplicate ID does not queue twice");
+        Check(deathQueue.Observe(b, false, false) && deathQueue.Count == 2, "Two separate deaths queue");
+        Check(deathQueue.Current == a.Id, "First death shown first");
+        Check(!deathQueue.Acknowledge(b.Id) && deathQueue.Count == 2, "Cannot acknowledge a later plaque");
+        Check(deathQueue.Acknowledge(a.Id) && deathQueue.Current == b.Id, "Close advances exactly one plaque");
+        Check(!deathQueue.Observe(a, false, false), "Acknowledged ID cannot requeue");
+        Check(deathQueue.Acknowledge(b.Id) && deathQueue.Count == 0 && deathQueue.Current == null, "Last plaque drains queue");
+        var freshQueue = new FatalityPlaqueQueue();
+        Check(freshQueue.Observe(a, false, false), "New timeline has independent queue");
+        // No-repeat cycles survive reloads and do not depend on the record
+        // continuing to display the message (e.g. a missing crew member returns).
+        var cycle = new InscriptionCycle();
+        var pool = new[] { "A", "B", "C", "A" };
+        for (int round = 0; round < 4; round++)
+        {
+            var drawn = Enumerable.Range(0, 3).Select(i => cycle.Pick(pool)).ToArray();
+            Check(drawn.Distinct().Count() == 3, "All unique messages used before next cycle");
+        }
+        var restoredCycle = new InscriptionCycle();
+        restoredCycle.Restore(new[] { "A", "B" });
+        Check(restoredCycle.Pick(new string[0]) == "" && restoredCycle.Used.Count == 2, "Empty pool does not reset cycle");
+        Check(restoredCycle.Pick(pool) == "C", "Reload resumes unfinished cycle");
+        Check(new[] { "A", "B", "C" }.Contains(restoredCycle.Pick(pool)) && restoredCycle.Used.Count == 1, "Exhaustion starts new cycle");
+        var cycles = new InscriptionCycles();
+        var legacy = new Casualty { Status = "Dead", Inscription = "A" };
+        var legacyMissing = new Casualty { Status = "Missing", Inscription = "B", InscriptionForMissing = true, InscriptionFromMissingPool = true };
+        cycles.Seed(new[] { legacy, legacyMissing });
+        Check(cycles.Deceased.Used.SetEquals(new[] { "A" }) && cycles.Missing.Used.SetEquals(new[] { "B" }), "Seed old records in separate pools");
+        Check(cycles.Deceased.Pick(new[] { "A", "B" }) == "B" && cycles.Missing.Pick(new[] { "A", "B" }) == "A", "Independent deceased and missing cycles");
+        legacyMissing.ReturnUT = 99;
+        Inscriptions.Assign(legacyMissing, null);
+        Check(cycles.Missing.Used.Contains("B"), "Return does not forget used inscription");
+        var archivedCycles = new InscriptionCycles();
+        archivedCycles.CopyFrom(cycles);
+        Check(archivedCycles.Missing.Used.SetEquals(cycles.Missing.Used) && archivedCycles.Deceased.Used.SetEquals(cycles.Deceased.Used), "Archive snapshot retains cycle state");
+        Check(cycles.Deceased.Pick(new[] { "A", "B", "New" }) == "New", "Newly added messages used before restarting cycle");
+        Check(!archivedCycles.Deceased.Used.Contains("New"), "Archive snapshot independent of later draws");
+        var delayed = new FatalityPlaqueQueue();
+        Check(!delayed.Observe(a, false, false, 10, false) && delayed.Count == 0, "Disabled automatic plaques do not queue");
+        Check(delayed.Observe(a, false, false, 10, true) && !delayed.IsReady(11.499), "Plaque waits default 1.5 real seconds");
+        Check(delayed.Observe(b, false, false, 10.5, true, 2.5) && delayed.IsReady(11.5), "First plaque retains its original deadline");
+        Check(delayed.Acknowledge(a.Id) && !delayed.IsReady(12.999) && delayed.IsReady(13), "Second plaque uses its configured death-relative delay");
+        var immediate = new FatalityPlaqueQueue();
+        Check(immediate.Observe(a, false, false, 10, true, 0) && immediate.IsReady(10), "Zero delay is immediately ready");
+        var maximum = new FatalityPlaqueQueue();
+        Check(maximum.Observe(a, false, false, 10, true, 5) && !maximum.IsReady(14.999) && maximum.IsReady(15), "Maximum five-second delay");
+        Check(FatalityPlaqueQueue.ClampDelay(-1) == 0 && FatalityPlaqueQueue.ClampDelay(8) == 5, "Invalid range is clamped");
+        Check(FatalityPlaqueQueue.ClampDelay(double.NaN) == 1.5 && FatalityPlaqueQueue.ClampDelay(double.PositiveInfinity) == 5 && FatalityPlaqueQueue.ClampDelay(double.NegativeInfinity) == 0, "Non-finite saved delays are safe");
+        delayed.Clear();
+        Check(delayed.Count == 0 && !delayed.IsReady(99), "Disabling presentation clears pending plaques");
         Console.WriteLine(count + " assertions passed");
     }
 }

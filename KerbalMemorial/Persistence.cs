@@ -50,25 +50,54 @@ namespace KerbalMemorial
             }
             return list;
         }
+        internal static void WriteCycles(ConfigNode node, InscriptionCycles cycles)
+        {
+            node.RemoveNodes("INSCRIPTION_CYCLE");
+            foreach (bool missing in new[] { false, true })
+            {
+                var cycle = cycles.For(missing);
+                if (!cycle.Initialized) continue;
+                var child = node.AddNode("INSCRIPTION_CYCLE");
+                child.AddValue("status", missing ? "Missing" : "Deceased");
+                foreach (string message in cycle.Used.OrderBy(m => m, StringComparer.Ordinal))
+                    child.AddValue("used", Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(message)));
+            }
+        }
+        internal static InscriptionCycles ReadCycles(ConfigNode node)
+        {
+            var cycles = new InscriptionCycles();
+            foreach (var child in node.GetNodes("INSCRIPTION_CYCLE"))
+            {
+                string status = child.GetValue("status");
+                if (status != "Missing" && status != "Deceased") continue;
+                var used = new List<string>();
+                foreach (string encoded in child.GetValues("used"))
+                    try { used.Add(System.Text.Encoding.UTF8.GetString(Convert.FromBase64String(encoded))); }
+                    catch (FormatException) { }
+                cycles.For(status == "Missing").Restore(used);
+            }
+            return cycles;
+        }
         internal static string DirectoryPath { get { return Path.Combine(KSPUtil.ApplicationRootPath, "saves", HighLogic.SaveFolder, "KerbalMemorial"); } }
         internal static string ArchivePath { get { return Path.Combine(DirectoryPath, "Casualties.cfg"); } }
-        internal static List<Casualty> LoadArchive()
+        internal static List<Casualty> LoadArchive(out InscriptionCycles cycles)
         {
-            if (!File.Exists(ArchivePath) && !File.Exists(ArchivePath + ".bak")) return new List<Casualty>();
-            try { return ReadArchive(ArchivePath); }
-            catch { return ReadArchive(ArchivePath + ".bak"); }
+            if (!File.Exists(ArchivePath) && !File.Exists(ArchivePath + ".bak")) { cycles = new InscriptionCycles(); return new List<Casualty>(); }
+            try { return ReadArchive(ArchivePath, out cycles); }
+            catch { return ReadArchive(ArchivePath + ".bak", out cycles); }
         }
-        private static List<Casualty> ReadArchive(string path)
+        private static List<Casualty> ReadArchive(string path, out InscriptionCycles cycles)
         {
             var root = ConfigNode.Load(path);
             var node = root == null ? null : (root.GetNode("KERBAL_MEMORIAL") ?? root);
             if (node == null || node.GetValue("format") != "1") throw new IOException("Invalid archive: " + path);
+            cycles = ReadCycles(node);
             return Read(node);
         }
-        internal static void SaveArchive(IEnumerable<Casualty> records)
+        internal static void SaveArchive(IEnumerable<Casualty> records, InscriptionCycles cycles)
         {
             Directory.CreateDirectory(DirectoryPath);
-            var root = new ConfigNode(); var node = root.AddNode("KERBAL_MEMORIAL"); node.AddValue("format", "1"); Write(node, records);
+            var root = new ConfigNode(); var node = root.AddNode("KERBAL_MEMORIAL"); node.AddValue("format", "1"); Write(node, records); WriteCycles(node, cycles);
             string path = ArchivePath, temp = path + ".tmp";
             root.Save(temp);
             if (File.Exists(path)) File.Replace(temp, path, path + ".bak"); else File.Move(temp, path);

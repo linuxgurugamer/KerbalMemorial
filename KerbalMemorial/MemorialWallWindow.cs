@@ -80,7 +80,7 @@ namespace KerbalMemorial
             plaque = Load("WallPlaque");
             altFull = Load("AltWallFull"); altPlaque = Load("AltWallPlaque");
         }
-        internal void OnGUI(int id, CasualtyTracker tracker, Action openMemorial)
+        internal void OnGUI(int id, CasualtyTracker tracker, Action openMemorial, Action closeWall)
         {
             if (!IsOpen || tracker == null) return;
             EnsureArtwork();
@@ -93,7 +93,7 @@ namespace KerbalMemorial
             hideThemeButton = settings.hideWallThemeButton;
             if (refreshRecords || Event.current.type == EventType.Layout)
             {
-                records = tracker.VisibleRecords().Where(Ledger.IsMemorialLoss)
+                records = tracker.VisibleRecords(refreshRecords).Where(Ledger.IsMemorialLoss)
                     .OrderBy(r => r.UT < 0 ? double.MaxValue : r.UT).ThenBy(r => r.Name).ToList();
                 refreshRecords = false;
             }
@@ -105,7 +105,7 @@ namespace KerbalMemorial
             // can shrink to its empty layout group on Layout/Repaint, even when
             // Width/Height options are supplied. Use the fixed-size GUI window
             // and accept only its returned position; the resize handle owns size.
-            Rect moved = ClickThruBlocker.GUIWindow(id, rect, windowId => Draw(windowId, openMemorial), "Kerbal Memorial Wall");
+            Rect moved = ClickThruBlocker.GUIWindow(id, rect, windowId => Draw(windowId, openMemorial, closeWall), "Kerbal Memorial Wall");
             rect.x = moved.x;
             rect.y = moved.y;
             if (resizeDelta != Vector2.zero)
@@ -116,7 +116,7 @@ namespace KerbalMemorial
             }
             if (IsOpen) individual.OnGUI(id ^ 0x0000504c, tracker);
         }
-        private void Draw(int id, Action openMemorial)
+        private void Draw(int id, Action openMemorial, Action closeWall)
         {
             if (nameStyle == null)
             {
@@ -141,7 +141,7 @@ namespace KerbalMemorial
             bool close = GUI.Button(new Rect((rect.width - 100) / 2f, rect.height - 34, 100, 26), "Close");
             Resize();
             if (!resizing) GUI.DragWindow();
-            if (close) Close();
+            if (close) closeWall();
         }
         private void DrawWall(Rect area)
         {

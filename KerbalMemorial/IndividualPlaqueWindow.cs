@@ -21,6 +21,8 @@ namespace KerbalMemorial
         private Vector2 noteScroll;
         private readonly PlaqueInfoWindow info = new PlaqueInfoWindow();
 
+        internal bool IsOpen => open || pending != null;
+
         internal void Open(string id, Rect parent)
         {
             if (string.IsNullOrEmpty(id)) return;

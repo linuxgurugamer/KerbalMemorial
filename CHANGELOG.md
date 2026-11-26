@@ -1,3 +1,34 @@
+# 0.1.0.39
+- Make the automatic death plaque delay configurable per save in Settings / Help and stock difficulty settings: 0-5 real-time seconds, default 1.5, in 0.1-second steps. Each new death uses the current delay; Flight Results deferral remains unchanged.
+
+# 0.1.0.38
+- Randomly draw distinct inscriptions without replacement in separate persisted missing/deceased cycles. Seed old saves from assigned messages and preserve cycle progress across save/reload and permanent history.
+- Add per-save Show memorial plaque on death option (default on). Disabled presentation does not defer Flight Results or queue old deaths.
+- Wait one real-time second after each confirmed fatality before showing its plaque; keep Flight Results held during the delay and the existing sequential queue.
+
+# 0.1.0.37
+- Automatically show each newly confirmed death plaque, one at a time. Closing acknowledges that record; historical imports and duplicate notifications do not create popups.
+- Hold the stock Flight Results dialog visually until the queue is acknowledged; preserve its data and remove the temporary visibility gate. Handle stock crash pause while results are held.
+
+# 0.1.0.36
+- Use separate PluginData/Inscriptions/Deceased and Missing pools. Persist random missing inscriptions, upgrade old fixed messages when a pool is available, and keep fallback text until then. Preserve assigned messages and switch pools on confirmed death.
+
+# 0.1.0.35
+- Synchronize the stock and Blizzy toolbar states through shared wall open/close callbacks. Closing child windows leaves the toolbar active; pause and F2 preserve the open state.
+
+# 0.1.0.34
+- Assign "Missing, but not forgotten" to unconfirmed missing crew, including existing records and archives. Replace temporary inscriptions on confirmed death and clear them on return.
+
+# 0.1.0.33
+- Backfill missing inscriptions when the Memorial Wall loads its list, including older saved and archived fatalities; immediately assign inscriptions to newly imported fatalities. Preserve saved messages and retry empty pools on the existing schedule.
+
+# 0.1.0.32
+- Replace README.md with the updated supplied text.
+
+# 0.1.0.31
+- Remove build.ps1.
+- Replace README.md with the supplied text.
+
 # 0.1.0.30
 - Add stock-event classifications for overheating, excessive G-force/pressure, water impact, vessel collisions, structural failure, aerodynamic breakup, EVA accidents and unloaded-vessel terrain impacts.
 - Correlate evidence by crew, part/vessel and a short real-time and game-time window; prioritize specific evidence and retain external API causes.

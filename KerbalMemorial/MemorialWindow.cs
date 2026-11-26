@@ -16,10 +16,16 @@ namespace KerbalMemorial
     [KSPAddon(KSPAddon.Startup.EveryScene, false)]
     public sealed class MemorialWindow : MonoBehaviour
     {
-        private static ToolbarControl toolbarController;
+        private ToolbarControl toolbarController;
         private bool open, openMainRequested, hidden, paused, subscribed, resizing, showFullDetails;
         private readonly SignSettingsWindow signSettings = new SignSettingsWindow();
         private readonly MemorialWallWindow wall = new MemorialWallWindow();
+        private readonly IndividualPlaqueWindow deathPlaque = new IndividualPlaqueWindow();
+        private readonly FlightResultsGate resultsGate = new FlightResultsGate();
+        private FatalityPlaqueQueue presentingQueue;
+        private string presentingDeath;
+        private float releaseResultsAt;
+        private bool canvasHooked, resumeManualOnLayout;
         private Rect rect = new Rect(100, 80, 780, 580);
         private static Rect lastRect = new Rect(100, 80, 780, 580);
         private Vector2 listScroll, detailScroll, statsScroll, settingsScroll, resizeDelta;
@@ -36,12 +42,15 @@ namespace KerbalMemorial
                 return;
             rect = lastRect;
             toolbarController = gameObject.AddComponent<ToolbarControl>();
-            toolbarController.AddToAllToolbars(wall.Open, CloseAll,
+            toolbarController.AddToAllToolbars(OpenWall, CloseWall,
                 ApplicationLauncher.AppScenes.FLIGHT | ApplicationLauncher.AppScenes.MAPVIEW | ApplicationLauncher.AppScenes.SPACECENTER | ApplicationLauncher.AppScenes.TRACKSTATION | ApplicationLauncher.AppScenes.VAB | ApplicationLauncher.AppScenes.SPH,
                 "KerbalMemorial", "memorial", "KerbalMemorial/PluginData/Textures/icon38", "KerbalMemorial/PluginData/Textures/icon24", "Kerbal Memorial");
             GameEvents.onHideUI.Add(Hide); GameEvents.onShowUI.Add(Show);
             GameEvents.onGamePause.Add(OnPause); GameEvents.onGameUnpause.Add(OnUnpause);
             subscribed = true;
+            // Catch dialogs spawned after Update/LateUpdate but before the UI renders.
+            Canvas.willRenderCanvases += SyncFlightResults;
+            canvasHooked = true;
         }
         private void CancelResize() { resizing = false; resizeDelta = Vector2.zero; wall.Hide(); }
         private void Hide() { hidden = true; CancelResize(); }
@@ -52,6 +61,8 @@ namespace KerbalMemorial
         private void OnUnpause() { paused = false; }
         public void OnDestroy()
         {
+            if (canvasHooked) { Canvas.willRenderCanvases -= SyncFlightResults; canvasHooked = false; }
+            ResetDeathPresentation();
             CloseAll();
             if (subscribed)
             {
@@ -59,7 +70,10 @@ namespace KerbalMemorial
                 GameEvents.onGamePause.Remove(OnPause); GameEvents.onGameUnpause.Remove(OnUnpause);
                 subscribed = false;
             }
-            if (toolbarController != null) { toolbarController.OnDestroy(); Destroy(toolbarController); }
+            if (toolbarController != null)
+            {
+                toolbarController.OnDestroy(); Destroy(toolbarController); toolbarController = null;
+            }
         }
         // The wall is the toolbar's root window. The main ledger is optional.
         private void RequestMainWindow() { openMainRequested = true; }
@@ -68,12 +82,102 @@ namespace KerbalMemorial
             open = false; openMainRequested = false; resizing = false; resizeDelta = Vector2.zero;
             signSettings.Close(); ReleasePortrait();
         }
+        private void OpenWall()
+        {
+            wall.Open();
+            // Keep stock and Blizzy in sync without invoking onTrue again.
+            if (toolbarController != null) toolbarController.SetTrue(false);
+        }
+        private void CloseWall()
+        {
+            CloseAll();
+            // Both the toolbar and the wall's Close button use this path.
+            // Do not invoke onFalse again (it is this same method).
+            if (toolbarController != null) toolbarController.SetFalse(false);
+        }
         private void CloseAll()
         {
             CloseMain(); wall.Close();
         }
+        private void ResetDeathPresentation()
+        {
+            deathPlaque.Close();
+            presentingQueue = null; presentingDeath = null;
+            releaseResultsAt = 0f;
+            resumeManualOnLayout = true;
+            resultsGate.Release();
+        }
+        private FatalityPlaqueQueue CurrentDeathQueue()
+        {
+            var tracker = CasualtyTracker.Instance;
+            return tracker != null && tracker.CanPresentDeathPlaques ? tracker.DeathPlaques : null;
+        }
+        public void LateUpdate() { if (subscribed) SyncFlightResults(); }
+        private void SyncFlightResults()
+        {
+            if (!isActiveAndEnabled) { ResetDeathPresentation(); return; }
+            var queue = CurrentDeathQueue();
+            if (queue != presentingQueue)
+            {
+                ResetDeathPresentation();
+                presentingQueue = queue;
+            }
+            if (queue == null || !HighLogic.LoadedSceneIsFlight)
+            {
+                resultsGate.Release(); releaseResultsAt = 0f;
+                return;
+            }
+            if (queue.Count > 0 || (resultsGate.IsHolding && Time.realtimeSinceStartup < releaseResultsAt))
+                resultsGate.Hold();
+            else resultsGate.Release();
+        }
+        private void DrawDeathPlaque(FatalityPlaqueQueue queue, CasualtyTracker tracker)
+        {
+            if (Event.current.type == EventType.Layout && presentingDeath != queue.Current)
+            {
+                deathPlaque.Close();
+                presentingDeath = queue.Current;
+                deathPlaque.Open(presentingDeath, new Rect(0f, Screen.height * .18f, Screen.width, Screen.height));
+            }
+            if (presentingDeath == null) return;
+            deathPlaque.OnGUI(GetInstanceID() ^ 0x4b4d4400, tracker);
+            // Close acknowledges just this plaque; the next opens on Layout.
+            // Do not let a close of the wall/toolbar acknowledge an automatic plaque.
+            if (!deathPlaque.IsOpen)
+            {
+                queue.Acknowledge(presentingDeath);
+                presentingDeath = null;
+                // Give the existing one-second roster scan time to catch any
+                // late death notifications before unveiling the stock results.
+                if (queue.Count == 0 && resultsGate.IsHolding)
+                    releaseResultsAt = Time.realtimeSinceStartup + 1.25f;
+            }
+        }
         public void OnGUI()
         {
+            if (!subscribed) return;
+            var queue = CurrentDeathQueue();
+            if (queue != presentingQueue || (queue != null && queue.Count > 0 && !resultsGate.IsHolding)) SyncFlightResults();
+            if (queue != null && queue.Count > 0)
+            {
+                resumeManualOnLayout = true;
+                CancelResize();
+                // Stock results can themselves pause flight or hide the HUD.
+                // If they are being held, the acknowledgement must remain usable.
+                // In normal flight, keep the existing pause and F2 behavior.
+                if (!resultsGate.IsHolding && (hidden || paused || (HighLogic.LoadedSceneIsFlight && FlightDriver.Pause))) return;
+                // Hold results immediately, even during the initial delay.
+                // Use real time so stock's automatic pause cannot stall the queue.
+                if (!queue.IsReady(Time.realtimeSinceStartup)) return;
+                GUI.skin = HighLogic.Skin;
+                DrawDeathPlaque(queue, CasualtyTracker.Instance);
+                return;
+            }
+            if (resumeManualOnLayout)
+            {
+                if (Event.current.type != EventType.Layout) return;
+                resumeManualOnLayout = false;
+            }
             // All child windows are drawn through this method. Check the live
             // flight pause state too, in case the addon starts after a pause event.
             if (paused || (HighLogic.LoadedSceneIsFlight && FlightDriver.Pause))
@@ -87,13 +191,8 @@ namespace KerbalMemorial
             // wall's MouseUp callback, so its first repaint has valid layout data.
             bool bringMainToFront = openMainRequested && Event.current.type == EventType.Layout;
             if (bringMainToFront) { openMainRequested = false; open = true; }
-            wall.OnGUI(GetInstanceID() ^ 0x4b4d5700, CasualtyTracker.Instance, RequestMainWindow);
-            if (!wall.IsOpen)
-            {
-                CloseMain();
-                if (toolbarController != null) toolbarController.SetFalse(false);
-                return;
-            }
+            wall.OnGUI(GetInstanceID() ^ 0x4b4d5700, CasualtyTracker.Instance, RequestMainWindow, CloseWall);
+            if (!wall.IsOpen) return;
             if (!open) return;
             if (wrap == null) wrap = new GUIStyle(GUI.skin.label) { wordWrap = true };
             if (incidentStyle == null) incidentStyle = new GUIStyle(GUI.skin.label) { alignment = TextAnchor.UpperRight, wordWrap = true };
@@ -291,6 +390,14 @@ namespace KerbalMemorial
             var s = CasualtyTracker.Options;
             s.permanentHistory = GUILayout.Toggle(s.permanentHistory, "Keep incidents across quickloads and reverts");
             s.notifications = GUILayout.Toggle(s.notifications, "Show casualty notifications");
+            s.showDeathPlaques = GUILayout.Toggle(s.showDeathPlaques, "Show memorial plaque on death");
+            GUILayout.BeginHorizontal();
+            GUILayout.Label("Death plaque delay", GUILayout.Width(145));
+            float delay = (float)FatalityPlaqueQueue.ClampDelay(s.deathPlaqueDelay);
+            s.deathPlaqueDelay = Mathf.Round(GUILayout.HorizontalSlider(delay,
+                FatalityPlaqueQueue.MinDelay, FatalityPlaqueQueue.MaxDelay, GUILayout.ExpandWidth(true)) * 10f) / 10f;
+            GUILayout.Label(s.deathPlaqueDelay.ToString("F1") + " s", GUILayout.Width(60));
+            GUILayout.EndHorizontal();
             s.importExisting = GUILayout.Toggle(s.importExisting, "Import previously dead or missing Kerbals");
             GUILayout.Space(8);
             GUILayout.Label("Memorial Wall Theme", wrap);

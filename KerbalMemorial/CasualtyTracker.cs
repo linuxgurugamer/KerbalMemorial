@@ -11,13 +11,26 @@ namespace KerbalMemorial
     {
         public static CasualtyTracker Instance { get; private set; }
         internal readonly Ledger Live = new Ledger();
+        internal FatalityPlaqueQueue DeathPlaques { get; private set; } = new FatalityPlaqueQueue();
+        internal bool CanPresentDeathPlaques
+        {
+            get
+            {
+                if (!Active) return false;
+                if (Options.showDeathPlaques) return true;
+                DeathPlaques.Clear();
+                return false;
+            }
+        }
+        private InscriptionCycles inscriptionCycles = new InscriptionCycles();
+        private InscriptionCycles archiveCycles = new InscriptionCycles();
         private readonly PortraitCache portraits = new PortraitCache();
         private readonly Dictionary<string, Casualty> archive = new Dictionary<string, Casualty>();
         private readonly Dictionary<string, Context> snapshots = new Dictionary<string, Context>();
         private readonly Dictionary<string, RS> seen = new Dictionary<string, RS>();
         private readonly Dictionary<string, Hint> hints = new Dictionary<string, Hint>();
         private sealed class Hint { public string Cause, Confidence, Source; public float Time; public double UT; public Context Location; }
-        private bool ready, initialized, archiveLoaded, archiveDirty, wasPermanent, subscribed;
+        private bool ready, initialized, archiveLoaded, archiveDirty, wasPermanent, subscribed, archiveCycleAdopted;
         private float nextPoll, nextWrite, nextPortraitPoll, nextInscriptionPoll;
         private string saveFolder;
         private Vessel portraitVessel;
@@ -87,9 +100,10 @@ namespace KerbalMemorial
         public override void OnLoad(ConfigNode node)
         {
             base.OnLoad(node);
-            ready = false; Live.Records.Clear(); Live.Records.AddRange(Persistence.Read(node));
+            ready = false; DeathPlaques = new FatalityPlaqueQueue(); Live.Records.Clear(); Live.Records.AddRange(Persistence.Read(node));
+            inscriptionCycles = Persistence.ReadCycles(node); archiveCycles = new InscriptionCycles();
             archive.Clear(); portraitVessel = null; portraits.Read(node); snapshots.Clear(); hints.Clear(); seen.Clear();
-            initialized = archiveLoaded = archiveDirty = wasPermanent = false; Error = null;
+            initialized = archiveLoaded = archiveDirty = wasPermanent = archiveCycleAdopted = false; Error = null;
             bool.TryParse(node.GetValue("initialized"), out initialized);
             saveFolder = HighLogic.SaveFolder; nextPoll = nextWrite = nextPortraitPoll = nextInscriptionPoll = 0; ready = true;
         }
@@ -99,6 +113,7 @@ namespace KerbalMemorial
             if (Active) { try { Poll(true); FlushArchive(); } catch (Exception e) { Debug.LogWarning("[KerbalMemorial] Save scan: " + e); } }
             node.SetValue("initialized", initialized.ToString(), true);
             Persistence.Write(node, Live.Records);
+            Persistence.WriteCycles(node, inscriptionCycles);
             portraits.Write(node);
         }
         public void Start()
@@ -167,11 +182,7 @@ namespace KerbalMemorial
                 seen[crew.name] = status;
             }
             initialized = true;
-            if (forceInscriptions || Time.realtimeSinceStartup >= nextInscriptionPoll)
-            {
-                nextInscriptionPoll = Time.realtimeSinceStartup + 10f;
-                BackfillInscriptions();
-            }
+            RefreshInscriptions(forceInscriptions);
             foreach (var name in hints.Where(h => !Fresh(h.Value)).Select(h => h.Key).ToArray()) hints.Remove(name);
         }
         private void BeforeStatus(ProtoCrewMember c, RS oldStatus, RS newStatus)
@@ -450,6 +461,7 @@ namespace KerbalMemorial
         private Casualty Record(ProtoCrewMember crew, RS status, bool killed, bool imported, string source)
         {
             if (!Active) return null;
+            double observedAt = Time.realtimeSinceStartup;
             var old = Live.Open(crew.name); bool wasFatal = old != null && old.Fatal;
             var r = Live.Observe(crew.name, status.ToString(), Now, killed, imported);
             if (r == null) return null;
@@ -462,47 +474,58 @@ namespace KerbalMemorial
                 if (r.Location == null && !imported && snapshots.TryGetValue(crew.name, out Context ctx)) r.Location = ctx.Copy();
                 if (!imported) ApplyHint(r);
                 r.History = History(crew);
-                // Historical imports are handled together by the poll's backfill.
-                // Newly reported fatalities receive an inscription immediately.
-                if (r.Fatal && !imported && string.IsNullOrWhiteSpace(r.Inscription))
-                {
-                    EnsureArchive();
-                    Inscriptions.Assign(r, () =>
-                    {
-                        if (Permanent && archive.TryGetValue(r.Id, out Casualty previous) && !string.IsNullOrWhiteSpace(previous.Inscription))
-                            return previous.Inscription;
-                        return Inscriptions.Pick(ReadInscriptionPool());
-                    });
-                }
                 if (!imported && Options.notifications && (old == null || (!wasFatal && r.Fatal))) ScreenMessages.PostScreenMessage(crew.name + (r.Fatal ? " has died." : " is missing."), 4f, ScreenMessageStyle.UPPER_CENTER);
             }
             else { snapshots.Remove(crew.name); hints.Remove(crew.name); }
+            // Assign new losses immediately, and clear temporary messages on return.
+            if (Inscriptions.NeedsMessage(r))
+            {
+                EnsureArchive();
+                Casualty previous = null;
+                if (Permanent) archive.TryGetValue(r.Id, out previous);
+                Inscriptions.AssignFrom(r, previous,
+                    () => PickInscription(false, ReadInscriptionPool(false)),
+                    () => PickInscription(true, ReadInscriptionPool(true)));
+            }
             Changed(r);
+            // Only newly confirmed deaths, not old records imported on load.
+            DeathPlaques.Observe(r, wasFatal, imported, observedAt, Options.showDeathPlaques, Options.deathPlaqueDelay);
             return r;
         }
-        private static List<string> ReadInscriptionPool()
+        private static List<string> ReadInscriptionPool(bool missing)
         {
-            return Inscriptions.ReadPool(System.IO.Path.Combine(KSPUtil.ApplicationRootPath,
-                "GameData", "KerbalMemorial", "PluginData", "Inscriptions"),
+            return Inscriptions.ReadStatusPool(System.IO.Path.Combine(KSPUtil.ApplicationRootPath,
+                "GameData", "KerbalMemorial", "PluginData", "Inscriptions"), missing,
                 message => Debug.LogWarning("[KerbalMemorial] " + message));
+        }
+        private string PickInscription(bool missing, List<string> pool)
+        {
+            // Older saves have no cycle data. Seed once from their actual saved
+            // inscriptions, then persist the cycle independently of record status.
+            inscriptionCycles.Seed(Live.Records);
+            string message = inscriptionCycles.For(missing).Pick(pool);
+            if (Permanent && archiveLoaded && !string.IsNullOrEmpty(message))
+            {
+                archiveCycles.CopyFrom(inscriptionCycles);
+                archiveDirty = true;
+            }
+            return message;
+        }
+        private void RefreshInscriptions(bool force = false)
+        {
+            if (!Active || (!force && Time.realtimeSinceStartup < nextInscriptionPoll)) return;
+            nextInscriptionPoll = Time.realtimeSinceStartup + 10f;
+            BackfillInscriptions();
         }
         private void BackfillInscriptions()
         {
             EnsureArchive();
-            // Read once per pass, only if at least one fatality needs a message.
-            List<string> pool = null;
-            Func<string> pick = () => Inscriptions.Pick(pool ?? (pool = ReadInscriptionPool()));
+            // Read each pool at most once per pass, and only if needed.
+            List<string> deceased = null, missing = null;
+            Func<string> pick = () => PickInscription(false, deceased ?? (deceased = ReadInscriptionPool(false)));
+            Func<string> pickMissing = () => PickInscription(true, missing ?? (missing = ReadInscriptionPool(true)));
             bool includeArchive = Permanent && archiveLoaded;
-            var liveIds = new HashSet<string>();
-            foreach (var record in Live.Records)
-            {
-                Casualty archived = null;
-                if (includeArchive) { liveIds.Add(record.Id); archive.TryGetValue(record.Id, out archived); }
-                if (Inscriptions.FillPair(record, archived, pick)) archiveDirty = true;
-            }
-            if (includeArchive)
-                foreach (var record in archive.Values)
-                    if (!liveIds.Contains(record.Id) && Inscriptions.Assign(record, pick)) archiveDirty = true;
+            if (Inscriptions.Backfill(Live.Records, includeArchive ? archive : null, pick, pickMissing)) archiveDirty = true;
             if (includeArchive && archiveDirty) FlushArchive();
         }
         private static string History(ProtoCrewMember crew)
@@ -526,12 +549,40 @@ namespace KerbalMemorial
             if (!Permanent) { wasPermanent = false; return; }
             if (!archiveLoaded)
             {
-                try { foreach (var r in Persistence.LoadArchive()) archive[r.Id] = r; archiveLoaded = true; Error = null; }
+                try { foreach (var r in Persistence.LoadArchive(out archiveCycles)) archive[r.Id] = r; archiveLoaded = true; Error = null; }
                 catch (Exception e) { Error = "Cannot read casualty archive: " + e.Message; return; }
             }
             if (!wasPermanent)
             {
+                // The archive owns the cycle across reverts. On the first
+                // activation seed legacy history, and include live-only records.
+                // On subsequent toggles in this scenario the live cycle has
+                // continued from the last archived cycle, so keep that progress.
+                if (archiveCycles.Deceased.Initialized || archiveCycles.Missing.Initialized)
+                {
+                    if (!archiveCycleAdopted)
+                    {
+                        var liveOnly = Live.Records.Where(r => !archive.ContainsKey(r.Id)).ToList();
+                        archiveCycles.Seed(Live.Records.Concat(archive.Values));
+                        archiveCycles.Deceased.Used.UnionWith(liveOnly.Select(Inscriptions.FatalMessage).Where(m => !string.IsNullOrWhiteSpace(m)));
+                        archiveCycles.Missing.Used.UnionWith(liveOnly.Select(Inscriptions.SavedMissingMessage).Where(m => !string.IsNullOrWhiteSpace(m)));
+                        inscriptionCycles.CopyFrom(archiveCycles);
+                    }
+                }
+                else
+                {
+                    // Keep a live cycle if an archive is created for the first time;
+                    // for a legacy archive include its already assigned messages.
+                    inscriptionCycles.Seed(Live.Records.Concat(archive.Values));
+                    inscriptionCycles.Deceased.Used.UnionWith(archive.Values.Where(r => !Live.Records.Any(l => l.Id == r.Id)).Select(Inscriptions.FatalMessage).Where(m => !string.IsNullOrWhiteSpace(m)));
+                    inscriptionCycles.Missing.Used.UnionWith(archive.Values.Where(r => !Live.Records.Any(l => l.Id == r.Id)).Select(Inscriptions.SavedMissingMessage).Where(m => !string.IsNullOrWhiteSpace(m)));
+                }
+                archiveCycleAdopted = true;
+                archiveCycles.CopyFrom(inscriptionCycles);
+                archiveDirty = true;
                 wasPermanent = true;
+                // The newly visible archive also needs its inscription check.
+                nextInscriptionPoll = 0;
                 foreach (var r in Live.Records) if (!archive.ContainsKey(r.Id)) { archive[r.Id] = r.Copy(); archiveDirty = true; }
             }
         }
@@ -544,7 +595,8 @@ namespace KerbalMemorial
             {
                 if (previous.Closed && !copy.Closed) copy.ReturnUT = previous.ReturnUT;
                 if (string.IsNullOrEmpty(copy.PortraitPng)) copy.PortraitPng = previous.PortraitPng;
-                if (string.IsNullOrEmpty(copy.Inscription)) copy.Inscription = previous.Inscription;
+                // Reuse only a compatible saved inscription, including random missing messages.
+                Inscriptions.AssignFrom(copy, previous, null);
                 if (previous.ExternalCause && !copy.ExternalCause) { copy.Cause = previous.Cause; copy.Confidence = previous.Confidence; copy.Source = previous.Source; copy.ExternalCause = true; }
             }
             archive[r.Id] = copy; archiveDirty = true;
@@ -553,13 +605,18 @@ namespace KerbalMemorial
         private void FlushArchive()
         {
             if (!archiveLoaded || !archiveDirty || saveFolder != HighLogic.SaveFolder || KrashIntegration.IsSimulationActive) return;
-            try { Persistence.SaveArchive(archive.Values); archiveDirty = false; Error = null; }
+            try { Persistence.SaveArchive(archive.Values, archiveCycles); archiveDirty = false; Error = null; }
             catch (Exception e) { Error = "Cannot save casualty archive: " + e.Message; Debug.LogWarning("[KerbalMemorial] " + Error); }
             nextWrite = Time.realtimeSinceStartup + 5f;
         }
-        internal List<Casualty> VisibleRecords()
+        internal List<Casualty> VisibleRecords(bool refreshInscriptions = false)
         {
-            EnsureArchive(); var result = Live.Records.ToList();
+            EnsureArchive();
+            // On the first load of the wall's list, backfill before returning
+            // records to any GUI. Regular Layout/Repaint refreshes retain the
+            // retry interval, avoiding disk reads each frame if the pool is empty.
+            RefreshInscriptions(refreshInscriptions);
+            var result = Live.Records.ToList();
             if (Permanent) { var ids = new HashSet<string>(result.Select(r => r.Id)); result.AddRange(archive.Values.Where(r => !ids.Contains(r.Id))); }
             return result.OrderByDescending(r => r.UT).ThenBy(r => r.Name).ToList();
         }

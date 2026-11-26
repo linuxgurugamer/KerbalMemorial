@@ -12,7 +12,7 @@ namespace KerbalMemorial
         public string Status = "Missing", Cause = "Unknown", Confidence = "Unknown", Source = "", Notes = "", History = "";
         public string PortraitPng = "", Inscription = "";
         public double UT = -1, DeathUT = -1, ReturnUT = -1;
-        public bool ReportedKilled, Imported, ExternalCause;
+        public bool ReportedKilled, Imported, ExternalCause, InscriptionForMissing, InscriptionFromMissingPool;
         public Context Location;
         public bool Closed { get { return ReturnUT >= 0; } }
         public bool Fatal { get { return ReportedKilled || Status == "Dead"; } }
