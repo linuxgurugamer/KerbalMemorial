@@ -1,3 +1,54 @@
+# 0.1.0.56
+- Update the default outdoor sign X/Y offsets and rotation angles for all eight sites using the supplied placement settings.
+
+# 0.1.0.55
+- Add the Astronaut Complex to the configured outdoor accident sign sites.
+
+# 0.1.0.54
+- Add per-site east/north offsets and independent sign facing, with a flight-only live adjustment window and saved outdoor overrides. Render artwork on the front only; retain steel rear and colliders.
+
+# 0.1.0.53
+- Replace the outdoor sign configuration with the seven supplied facility entries. Populate the site array from all configured child nodes instead of hard-coded facilities; keep explicit building-ID matching and existing sign rendering and placement.
+
+# 0.1.0.52
+- Replace FindBuilding with the supplied diagnostic implementation. Map outdoor artwork directly onto both faces of a solid board mesh with separate steel edges and explicit texture binding, removing overlapping face/backing geometry. Add artwork and renderer diagnostics.
+
+# 0.1.0.51
+- Use the supplied VAB building ID, place outdoor signs close to the actual frontage using wall raycasts and a 1 m VAB clearance, add solid backing/post/foot colliders on scenery layers, and render readable sign artwork on both sides.
+
+# 0.1.0.50
+- Add live, freestanding accident signs outside the VAB and SPH in flight. Detect loaded facility geometry, use ground raycasts for both supports, parent to the facility for floating-origin changes, and provide independent outdoor placement overrides.
+
+# 0.1.0.49
+- Restore the original SPH post lengths and foot positions (0.1.0.46), retaining the 1.75 m VAB extension.
+
+# 0.1.0.48
+- Extend both sign posts and lower their feet another 0.25 m (1.75 m total below the floor reference).
+
+# 0.1.0.47
+- Extend both freestanding sign posts and lower their feet by 1.5 m, keeping the sign and wall mounting unchanged.
+
+# 0.1.0.46
+- Make the toolbar controller static, with owner-only cleanup. Default the VAB/SPH safety signs to freestanding two-post mounts, with independent Wall/Posts settings, immediate updates, floor-adjusted supports and saved overrides.
+
+# 0.1.0.45
+- Replace the VAB/SPH safety sign with the approved Kerbal-style hazard-striped mascot artwork. Rectify the preview and replace its sample digits with four independently updated cream-colored number cards. Retain the live counter, physical dimensions, placement and settings.
+
+# 0.1.0.44
+- Crossfade consecutive automatic death plaques at the same position, honoring the next death delay. Keep both window slots alive during the transition and hold Flight Results through the final fade-out.
+
+# 0.1.0.43
+- Fade out automatic death plaques after Close using the same configurable 0-5 second duration as fade-in (default 2 seconds). Advance the queue and release Flight Results only after dismissal completes. Manual plaques and forced cleanup remain immediate.
+
+# 0.1.0.42
+- Replaced the toolbar icon images with the new gravestone artwork provided by the user, updating both 24 px and 38 px icons under `GameData/KerbalMemorial/PluginData/Textures/`.
+
+# 0.1.0.41
+- Make automatic death plaque fade-in configurable per save in Settings / Help and stock difficulty settings: 0-5 real-time seconds, default 2.0, in 0.1-second steps. Zero disables fading; manual plaques and Flight Results deferral are unchanged.
+
+# 0.1.0.40
+- Fade in each automatic fatality plaque over one real-time second after its configured delay. Enable Close and Details after the fade. Manual plaques remain immediate; Flight Results deferral is unchanged.
+
 # 0.1.0.39
 - Make the automatic death plaque delay configurable per save in Settings / Help and stock difficulty settings: 0-5 real-time seconds, default 1.5, in 0.1-second steps. Each new death uses the current delay; Flight Results deferral remains unchanged.
 

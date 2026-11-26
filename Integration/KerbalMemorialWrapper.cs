@@ -18,7 +18,10 @@ namespace KerbalMemorialIntegration
         /// <summary>True if the compatible API is loaded, not necessarily ready for reports.</summary>
         public static bool IsAvailable
         {
-            get { return Resolve() != null; }
+            get
+            {
+                return Resolve() != null;
+            }
         }
 
         /// <summary>
@@ -28,7 +31,8 @@ namespace KerbalMemorialIntegration
         /// </summary>
         public static bool ReportDeath(ProtoCrewMember crew, string cause, string sourceMod)
         {
-            if (crew == null || string.IsNullOrWhiteSpace(cause)) return false;
+            if (crew == null || string.IsNullOrWhiteSpace(cause))
+                return false;
             try
             {
                 DeathReporter method = Resolve();
@@ -43,7 +47,8 @@ namespace KerbalMemorialIntegration
 
         private static DeathReporter Resolve()
         {
-            if (reporter != null) return reporter;
+            if (reporter != null)
+                return reporter;
             try
             {
                 // Search loaded assemblies only; never load or require the optional mod.
@@ -53,21 +58,28 @@ namespace KerbalMemorialIntegration
                     if (!string.Equals(assembly.GetName().Name, "KerbalMemorial", StringComparison.OrdinalIgnoreCase))
                         continue;
                     Type api = assembly.GetType("KerbalMemorial.MemorialAPI", false);
-                    if (api == null) continue;
+                    if (api == null)
+                        continue;
                     MethodInfo method = api.GetMethod("ReportDeath", BindingFlags.Public | BindingFlags.Static,
                         null, new[] { typeof(ProtoCrewMember), typeof(string), typeof(string) }, null);
-                    if (method == null || method.ReturnType != typeof(bool)) continue;
+                    if (method == null || method.ReturnType != typeof(bool))
+                        continue;
                     reporter = (DeathReporter)Delegate.CreateDelegate(typeof(DeathReporter), method, false);
-                    if (reporter != null) return reporter;
+                    if (reporter != null)
+                        return reporter;
                 }
             }
-            catch (Exception ex) { WarnOnce(ex); }
+            catch (Exception ex)
+            {
+                WarnOnce(ex);
+            }
             return null;
         }
 
         private static void WarnOnce(Exception ex)
         {
-            if (warned) return;
+            if (warned)
+                return;
             warned = true;
             Debug.LogWarning("[KerbalMemorialWrapper] Optional death-report API failed: " + ex);
         }

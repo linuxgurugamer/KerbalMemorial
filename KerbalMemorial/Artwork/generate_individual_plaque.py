@@ -14,10 +14,12 @@ def replace(box, sample, radius=12, rounded=0, brightness=1):
     x,y,X,Y=box
     patch=im.crop(sample).resize((X-x,Y-y),Image.Resampling.LANCZOS)
     patch=ImageEnhance.Brightness(patch).enhance(brightness)
-    layer=Image.new('RGB',im.size); layer.paste(patch,(x,y))
+    layer=Image.new('RGB',im.size)
+    layer.paste(patch,(x,y))
     # Extend patch beyond feathered edge with a padded replica of its pixels.
     # Mask is inset to keep the adjacent original gold frame untouched.
-    mask=Image.new('L',(X-x,Y-y)); d=ImageDraw.Draw(mask)
+    mask=Image.new('L',(X-x,Y-y))
+    d=ImageDraw.Draw(mask)
     inset=max(2,radius*2)
     d.rounded_rectangle((inset,inset,X-x-inset-1,Y-y-inset-1),radius=rounded,fill=255)
     mask=mask.filter(ImageFilter.GaussianBlur(radius/2))
@@ -31,7 +33,9 @@ box=(296,77,582,411)
 x,y,X,Y=box
 patch=im.crop((470,490,790,670)).resize((X-x,Y-y),Image.Resampling.LANCZOS)
 patch=ImageEnhance.Brightness(patch).enhance(.82)
-mask=Image.new('L',patch.size); d=ImageDraw.Draw(mask); d.rounded_rectangle((1,1,patch.width-2,patch.height-2),radius=39,fill=255)
+mask=Image.new('L',patch.size)
+d=ImageDraw.Draw(mask)
+d.rounded_rectangle((1,1,patch.width-2,patch.height-2),radius=39,fill=255)
 im.paste(patch,(x,y),mask)
 classic=im.crop((172,16,1748,782))
 classic.save(out/'IndividualClassic.png',optimize=True)
@@ -44,7 +48,8 @@ canvas=Image.new('RGB',(w,h),(47,49,53))
 # central metal area to match the wide individual-plaque layout.
 upper_h=464
 scale=upper_h/alt.height
-left=round(176*scale); right=round(47*scale)
+left=round(176*scale)
+right=round(47*scale)
 canvas.paste(alt.crop((0,0,176,alt.height)).resize((left,upper_h),Image.Resampling.LANCZOS),(0,0))
 canvas.paste(alt.crop((176,0,350,alt.height)).resize((w-left-right,upper_h),Image.Resampling.LANCZOS),(left,0))
 canvas.paste(alt.crop((350,0,397,alt.height)).resize((right,upper_h),Image.Resampling.LANCZOS),(w-right,0))

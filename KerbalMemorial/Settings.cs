@@ -16,6 +16,8 @@ namespace KerbalMemorial
         public bool showDeathPlaques = true;
         [GameParameters.CustomFloatParameterUI("Death plaque delay (seconds)", minValue = FatalityPlaqueQueue.MinDelay, maxValue = FatalityPlaqueQueue.MaxDelay, stepCount = 51, displayFormat = "F1", toolTip = "Real-time seconds after a confirmed death before its plaque can appear. Zero means no intentional delay.")]
         public float deathPlaqueDelay = FatalityPlaqueQueue.DefaultDelay;
+        [GameParameters.CustomFloatParameterUI("Death plaque fade (seconds)", minValue = FatalityPlaqueQueue.MinFadeDuration, maxValue = FatalityPlaqueQueue.MaxFadeDuration, stepCount = 51, displayFormat = "F1", toolTip = "Real-time duration of both fade-in and fade-out for each automatic death plaque. Zero disables both animations.")]
+        public float deathPlaqueFadeDuration = FatalityPlaqueQueue.DefaultFadeDuration;
         [GameParameters.CustomParameterUI("Import existing casualties", toolTip = "Record already dead or missing crew when the tracker first sees them. Dates may be unknown.")]
         public bool importExisting = true;
         [GameParameters.CustomParameterUI("Use Alternate memorial wall theme", toolTip = "Off selects Classic; on selects the industrial Alternate wall.")]

@@ -23,13 +23,13 @@ Use a disposable save, with and without Missing Crew Respawn enabled. Back up th
 - Verify the upper-right timer and Statistics fatality timer show only whole days: 0 days before a full day, 1 day after exactly one day, and total days even across years. Test both stock calendar modes and custom calendars if installed.
 
 ## Editor safety sign (0.1.0.5)
-- Enter the VAB and SPH at each facility level. Verify one sign is centered below the interior flag, with readable three-line text, correct facing, and no clipping or overlap with the wall or flag. Orbit and zoom the camera; the board remains in world space and is occluded by scenery or parts normally.
+- Enter the VAB and SPH at each facility level. Verify one sign is centered below the interior flag, with readable two-line heading, correct facing, and no clipping or overlap with the wall or flag. Orbit and zoom the camera; the board remains in world space and is occluded by scenery or parts normally.
 - Switch between editors, change flag, return to the Space Center and re-enter. Verify no duplicate boards or leftover objects. The sign has no collider and does not interfere with part placement.
 - Start a fresh game: sign reads 0 DAYS; advance a day and check 1 DAYS. Trigger a missing or fatal casualty, return to editor, and check 0 DAYS. Advance multiple game days, reload/revert, and verify the sign follows the current timeline. Test with custom calendar day lengths and old saves with only undated casualties (--- DAYS).
 - Close the memorial window; sign remains visible. Adjust individual facility offsets in AccidentSign.cfg and restart the game to verify the sign can be fine-tuned without code changes.
 - Inspect KSP.log for the accident-sign placement message or a warning if no active flag renderer is available.
 
-- Verify the VAB/SPH safety sign digits render as four hanging green cards, with blank leading cards for values under 1000 and visibly smoother text/edges than the previous release.
+- Verify the VAB/SPH safety sign digits render as four cream-colored cards, with blank leading cards for values under 1000 and visibly smoother text/edges than the previous release.
 
 - Verify the default sign is half its previous width and height in both editors; the top gap below the flag remains unchanged.
 
@@ -45,7 +45,7 @@ Use a disposable save, with and without Missing Crew Respawn enabled. Back up th
 - Move each slider to both endpoints; verify width 1.0–5.0 and height 0.1–10.0 with one decimal place. With legacy width 0 and height -1, open and close without moving any slider; verify no override changes. Move one slider and check only its field is written, leaving the other three settings intact.
 - Move a slider and close; reopening shows the saved value. Verify there is no Apply button, and F2 and closing the parent hide the child window. Verify background dragging and click-through protection.
 - With an unwritable settings directory, changing a slider reports failure and leaves the previous value and sign layout unchanged. Delete PluginData/SignSettings.cfg while KSP is closed to restore AccidentSign.cfg defaults.
-- Verify the word DAYS is aligned on the same line to the right of all four cards and does not overlap the cards, including for 0, 42, 9999 and unknown-date dashes. Confirm SINCE LAST and ACCIDENT remain on their own lines.
+- Verify DAYS SINCE LAST ACCIDENT is above the four cards and the mascot and hazard stripes remain unobscured, including for 0, 42, 9999 and unknown-date dashes. Verify no baked-in example numbers or ghost digits remain, and each card retains its own texture after repeated updates.
 
 ## Smooth sign artwork (0.1.0.13)
 - Inspect lettering and printed numerals in both buildings at close range, at normal editor zoom, and at oblique angles. Confirm the 5×7 pixel-block lettering is gone and cards retain their blank leading positions.
@@ -144,3 +144,67 @@ Use a disposable save, with and without Missing Crew Respawn enabled. Back up th
 ## Configurable death plaque delay (0.1.0.39)
 - On a fresh or older save without the new setting, verify the default is 1.5 seconds. Change the slider in Settings / Help and in stock difficulty settings; both must display the same saved value in 0.1-second steps, from 0 to 5. Save and reload and verify persistence.
 - Test 0, 1.5 and 5 seconds with single and multiple fatalities. A zero delay has no intentional wait; the stock dialog gate must still hold Flight Results until the queue is acknowledged. For deaths separated in time, each deadline uses the setting at confirmation. Changing the setting affects newly queued deaths only. Disable automatic plaques and verify delay has no effect on stock results.
+
+
+## Automatic death plaque fade-in (0.1.0.40)
+- With automatic plaques enabled, confirm a fatality with delays of 0, 1.5 and 5 seconds. The first visible repaint starts a smooth fade using the configured duration (default 2 seconds) of the frame, title, artwork, portrait, text and controls. Verify both themes, unavailable portrait/artwork and long scrolling inscriptions. Close and Details must not activate until fully visible.
+- Destroy a vessel with multiple crew. Each queued plaque must fade independently, including during stock automatic pause; Flight Results must remain held through the delay, fades and acknowledgements. Verify the original stock results restore after the last plaque closes.
+- Open a wall plaque manually; it must appear at full opacity immediately. Verify that no tint leaks into Details, other windows or stock GUI, including after closing, disabling automatic plaques, quickload, F2, pause and scene changes.
+
+## Configurable automatic plaque fade (0.1.0.41)
+- On new and older saves verify a default fade of 2.0 seconds. Change the fade slider in either settings interface and confirm the same per-save value survives save/reload. Check 0 to 5 seconds in 0.1-second increments.
+- Test fade durations 0, 2 and 5 seconds independently of the plaque delay. Zero must display the plaque at full opacity with working buttons on opening. Each queued plaque uses the value at opening and fades independently; changing the value does not restart an active fade. Manual plaques always remain immediate. Verify Flight Results stays deferred until acknowledgement, including during stock automatic pause.
+
+
+## Automatic death plaque fade-out (0.1.0.43)
+- Confirm a death with the fade setting at 2 seconds. After fade-in, click Close and verify the entire plaque fades smoothly to transparent over 2 real-time seconds before it is dismissed. Details closes immediately; repeated clicks must not restart the fade or skip the queue.
+- Destroy a vessel with multiple fatalities. Verify each eligible successor fades in while the previous plaque fades out, at the same window position. The original Flight Results remains hidden during the last fade-out and the existing settling interval, including while stock has paused the game.
+- Test durations 0 and 5 seconds. Zero disables both animations; five applies to each direction. Verify the saved setting remains shared between the stock difficulty options and Settings / Help. Manual wall plaques open and close immediately.
+- Verify quickload, revert, disabled automatic plaques and scene exit during fade-out perform immediate cleanup, and that GUI tint does not leak into other windows.
+
+## Automatic death plaque crossfade (0.1.0.44)
+- With fade set to 2 seconds, confirm three or more fatalities. Close the first plaque after fade-in. Verify the outgoing and incoming plaques overlap for the transition, use the same position (including after dragging the first plaque), and alternate distinct window IDs. The next Close and Details must not activate until the transition completes. Repeat through the final plaque; no overlapping window should remain after its final fade-out.
+- Confirm a second death shortly before closing the first, with its delay still pending. Verify the first waits for the next deadline before starting the crossfade. A death arriving after the final fade starts may overlap for the remainder of that fade if ready, otherwise displays after its own delay. Verify no skipped or duplicated plaques.
+- Test fade duration 0 and 5, both themes, stock automatic pause, repeated Close clicks, quickload, revert, scene exit and disabling automatic plaques mid-transition. Verify both windows are cleaned up, Flight Results stays held until all plaques finish, and manual plaques are unchanged.
+
+## Freestanding editor signs (0.1.0.46)
+- With no saved mount overrides, enter the VAB and SPH. Confirm the sign stands in front of the flag wall on two steel posts with feet, not flush against the wall. Orbit the camera and check the rear backing, post attachment and contact with the floor at each building level. Verify the face, live digits and 3:2 aspect ratio are unchanged.
+- In Sign Settings, toggle Wall/Posts for the current facility repeatedly; verify immediate movement, no duplicate geometry, no colliders/editor interference and no change to width or clearance. Move both sliders in Posts mode: the sign and support positions should resize and the feet should stay at floor level.
+- Set different mounting modes in VAB and SPH, restart KSP and verify both persist. Changing a slider must preserve the mount override and vice versa. Test a legacy override file without postMounted, explicit base config false, custom floorY and legacy heightAboveFloor=-1. Test a failed settings write leaves the previous layout unchanged.
+- Switch scenes and reopen the toolbar; confirm only one toolbar controller is registered and that scene cleanup removes only its own controller. Confirm all sign support meshes/materials are removed on scene exit.
+
+## Extended sign supports (0.1.0.47)
+- Compare post-mounted signs in VAB and SPH with 0.1.0.46 at identical width, height and floor settings. Both supports must extend 1.5 m farther down, with the feet lowered by the same amount and the upper attachment and board unchanged. Check different heights, detected and configured floor references, and switching back to wall mounting.
+
+## Additional support extension (0.1.0.48)
+- Compare post-mounted signs in VAB and SPH with 0.1.0.47 at identical settings. Both posts and their feet must extend 0.25 m farther downward (1.75 m total below the floor reference), with the board, upper attachment and wall mounting unchanged.
+
+## Facility-specific support lengths (0.1.0.49)
+- Compare VAB with 0.1.0.48 and SPH with 0.1.0.46 at identical settings. VAB posts and feet must retain the 1.75 m extension; SPH posts and feet must return to the original floor reference. Verify both supports, the board and upper attachments, different height and floor settings, wall mounting and scene changes.
+
+## Outdoor flight signs (0.1.0.50)
+- Launch from the pad and runway, then drive or walk to the VAB and SPH. Verify two signs appear beside the main entrance, face outward, retain the mascot and four live digits, and have feet contacting the pavement without blocking the entrance. Check every stock building level and adjust bearing/offset if necessary.
+- Verify the sign updates after a casualty and when time advances; compare with both indoor counters. Test quickload, revert, vessel switch, time warp, floating-origin shifts and leaving/returning to KSC. Verify no duplicates or displaced signs.
+- Test destruction/repair, returning from orbit, leaving Kerbin, and leaving flight. Verify no orphaned signs, materials or colliders. In the config, disable one sign and adjust the other's dimensions/bearing/offset, restart KSP and check only the intended outdoor sign changes.
+- Verify the indoor mounting and placement settings still work, including the 1.75 m VAB-only support extension.
+
+## Outdoor sign corrections (0.1.0.51)
+- Verify the VAB sign is anchored to the exact configured `SpaceCenter/ResearchAndDevelopment/Facility/MainBuilding` ID. Check the log for facade raycast versus bounds fallback; confirm the VAB sign is close to the intended front wall, with rear support clearance of 1 m, and adjust bearing/offset if needed. Verify SPH placement independently.
+- Walk or drive into the backing, each support post and each foot; verify solid collisions on the scenery physics layer. Confirm indoor signs still have no colliders. Verify cleanup on building destruction, repair, scene changes and floating-origin shifts.
+- View each sign from the front and rear in daylight and at night. Both sides must show correctly oriented artwork and the same live number cards, not bare metal or a blank quad. Confirm counter updates and no z-fighting.
+
+## Outdoor board rendering (0.1.0.52)
+- Confirm both outdoor boards show artwork and live digits from the front and rear; approach from different distances, in daylight and at night. Check for blank faces and depth flicker. The board is now a single mesh with two artwork faces and four steel edges, rather than overlapping quads. Confirm colliders still work.
+- Check KSP.log for the building candidate names, IDs and scores, a warning when no building matches, the artwork texture dimensions and sample colors, shader name, two mesh submeshes and two material slots. If the sign is blank, retain these log lines and note whether the indoor artwork works.
+
+## Configurable outdoor sites (0.1.0.53)
+- Verify all eight configured sites load, and the log reports eight configured sites. Confirm exact building IDs, including the two separate R&D buildings and the Astronaut Complex, and check every sign for correct placement, collision and live artwork.
+- Disable one site, remove another, add a new child with a distinct name and exact building ID, then restart KSP. Verify the configured site count and that only enabled, matching sites have signs. Test an empty/missing outdoor node (no signs). Check independent overrides and cleanup after scene changes.
+- Confirm the indoor VAB/SPH signs and FindBuilding diagnostic logging remain unchanged.
+
+## Outdoor sign live adjustments (0.1.0.54)
+- In flight near KSC, open Kerbal Memorial and select Outdoor Signs. Confirm the compact independent window lists all eight configured sites and any additional sites. Disabled/unloaded sites are labeled.
+- Adjust X by +5 m, Y by -5 m, and facing from 90 to 180 degrees. Confirm east/north displacement, rotation in place, solid colliders and both posts reaching ground. Check that adjacent signs do not move. Test fractional and negative numeric input and +/- buttons; invalid partial input must not move the sign.
+- Save or Close; restart flight and KSP and verify per-site overrides persist. Confirm a sign without a rotation override defaults to its front bearing. Delete override file with KSP closed to restore base values.
+- Check the front has live artwork and the rear and four edges are plain steel. Verify face direction at 0/90/180/270 degrees. Confirm indoor signs are unchanged.
+- Check F2, pause, queued death plaques, scene changes and rapid numeric edits. Verify there are no duplicate meshes or colliders and no IMGUI errors.

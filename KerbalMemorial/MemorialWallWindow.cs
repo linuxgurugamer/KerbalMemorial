@@ -5,6 +5,8 @@ using System.Linq;
 using ClickThroughFix;
 using UnityEngine;
 
+using static KerbalMemorial.RegisterToolbar;
+
 namespace KerbalMemorial
 {
     // A separate visual memorial. Only the decorative parts of the reference
@@ -22,32 +24,58 @@ namespace KerbalMemorial
         private GUIStyle alternateNameStyle, alternateDateStyle, alternateStatusStyle, alternateEmptyStyle;
         private List<Casualty> records = new List<Casualty>();
         private readonly Dictionary<string, CachedPortrait> portraits = new Dictionary<string, CachedPortrait>();
-        private sealed class CachedPortrait { internal string Data; internal Texture2D Texture; }
-        internal bool IsOpen { get; private set; }
+        private sealed class CachedPortrait
+        {
+            internal string Data;
+            internal Texture2D Texture;
+        }
+        internal bool IsOpen
+        {
+            get;
+            private set;
+        }
 
         internal void Open()
         {
-            if (IsOpen) return;
+            if (IsOpen)
+                return;
             scroll = Vector2.zero;
             refreshRecords = true;
             IsOpen = true;
         }
         internal void Close()
         {
-            IsOpen = false; resizing = false; resizeDelta = Vector2.zero;
+            IsOpen = false;
+            resizing = false;
+            resizeDelta = Vector2.zero;
             individual.Close();
             ClearPortraits();
-            Release(ref header); Release(ref side); Release(ref footer); Release(ref plaque); Release(ref wallBackground); Release(ref altFull); Release(ref altPlaque);
+            Release(ref header);
+            Release(ref side);
+            Release(ref footer);
+            Release(ref plaque);
+            Release(ref wallBackground);
+            Release(ref altFull);
+            Release(ref altPlaque);
             wallBackgroundWidth = wallBackgroundHeight = -1;
             artworkAttempted = false;
             records.Clear();
         }
-        internal void Hide() { resizing = false; resizeDelta = Vector2.zero; }
+        internal void Hide()
+        {
+            resizing = false;
+            resizeDelta = Vector2.zero;
+        }
         private static void Release(ref Texture2D texture)
-        { if (texture != null) UnityEngine.Object.Destroy(texture); texture = null; }
+        {
+            if (texture != null)
+                UnityEngine.Object.Destroy(texture);
+            texture = null;
+        }
         private void ClearPortraits()
         {
-            foreach (var p in portraits.Values) Release(ref p.Texture);
+            foreach (var p in portraits.Values)
+                Release(ref p.Texture);
             portraits.Clear();
         }
         private static Texture2D Load(string name)
@@ -57,12 +85,14 @@ namespace KerbalMemorial
             {
                 using (var stream = typeof(MemorialWallWindow).Assembly.GetManifestResourceStream("KerbalMemorial.Artwork." + name + ".png"))
                 {
-                    if (stream == null) throw new InvalidOperationException("Missing artwork: " + name);
+                    if (stream == null)
+                        throw new InvalidOperationException("Missing artwork: " + name);
                     using (var data = new MemoryStream())
                     {
                         stream.CopyTo(data);
                         texture = new Texture2D(2, 2, TextureFormat.RGBA32, false);
-                        if (!texture.LoadImage(data.ToArray(), true)) throw new InvalidOperationException("Invalid artwork: " + name);
+                        if (!texture.LoadImage(data.ToArray(), true))
+                            throw new InvalidOperationException("Invalid artwork: " + name);
                     }
                 }
                 texture.filterMode = FilterMode.Bilinear;
@@ -70,19 +100,28 @@ namespace KerbalMemorial
                 return texture;
             }
             catch (Exception e)
-            { Release(ref texture); Debug.LogWarning("[KerbalMemorial] Wall artwork: " + e.Message); return null; }
+            {
+                Release(ref texture);
+                Log.Warning("[KerbalMemorial] Wall artwork: " + e.Message);
+                return null;
+            }
         }
         private void EnsureArtwork()
         {
-            if (artworkAttempted) return;
+            if (artworkAttempted)
+                return;
             artworkAttempted = true;
-            header = Load("WallHeader"); side = Load("WallSide"); footer = Load("WallFooter");
+            header = Load("WallHeader");
+            side = Load("WallSide");
+            footer = Load("WallFooter");
             plaque = Load("WallPlaque");
-            altFull = Load("AltWallFull"); altPlaque = Load("AltWallPlaque");
+            altFull = Load("AltWallFull");
+            altPlaque = Load("AltWallPlaque");
         }
         internal void OnGUI(int id, CasualtyTracker tracker, Action openMemorial, Action closeWall)
         {
-            if (!IsOpen || tracker == null) return;
+            if (!IsOpen || tracker == null)
+                return;
             EnsureArtwork();
             var settings = CasualtyTracker.Options;
             if (settings.alternateWallTheme != useAlternateTheme)
@@ -114,7 +153,8 @@ namespace KerbalMemorial
                 rect.height = Mathf.Clamp(rect.height + resizeDelta.y, Mathf.Min(420, Screen.height), Mathf.Max(Mathf.Min(420, Screen.height), Screen.height - rect.y));
                 resizeDelta = Vector2.zero;
             }
-            if (IsOpen) individual.OnGUI(id ^ 0x0000504c, tracker);
+            if (IsOpen)
+                individual.OnGUI(id ^ 0x0000504c, tracker);
         }
         private void Draw(int id, Action openMemorial, Action closeWall)
         {
@@ -140,14 +180,19 @@ namespace KerbalMemorial
                 openMemorial();
             bool close = GUI.Button(new Rect((rect.width - 100) / 2f, rect.height - 34, 100, 26), "Close");
             Resize();
-            if (!resizing) GUI.DragWindow();
-            if (close) closeWall();
+            if (!resizing)
+                GUI.DragWindow();
+            if (close)
+                closeWall();
         }
         private void DrawWall(Rect area)
         {
-            if (area.width < 50 || area.height < 50) return;
-            if (useAlternateTheme) DrawAlternateWall(area);
-            else DrawClassicWall(area);
+            if (area.width < 50 || area.height < 50)
+                return;
+            if (useAlternateTheme)
+                DrawAlternateWall(area);
+            else
+                DrawClassicWall(area);
         }
 
         private void DrawClassicWall(Rect area)
@@ -161,16 +206,27 @@ namespace KerbalMemorial
             }
             float sideWidth = Mathf.Min(area.width * .19f, area.height * 239f / 980f);
             Rect sideRect = new Rect(area.x, area.y, sideWidth, area.height);
-            if (side != null && Event.current.type == EventType.Repaint) GUI.DrawTexture(sideRect, side, ScaleMode.ScaleToFit);
+            if (side != null && Event.current.type == EventType.Repaint)
+                GUI.DrawTexture(sideRect, side, ScaleMode.ScaleToFit);
             float x = area.x + sideWidth + 8f, w = Mathf.Max(1, area.xMax - x - 8f);
             float hh = Mathf.Min(w * 338f / 1099f, area.height * .30f);
             float fh = Mathf.Min(w * 126f / 1099f, area.height * .13f);
             Rect top = new Rect(x, area.y + 4, w, hh);
             Rect bottom = new Rect(x, area.yMax - fh - 4, w, fh);
-            if (header != null) { if (Event.current.type == EventType.Repaint) GUI.DrawTexture(top, header, ScaleMode.ScaleToFit); }
-            else GUI.Label(top, "KERBAL MEMORIAL WALL\nIN MEMORY OF OUR FALLEN CREW", emptyStyle);
-            if (footer != null) { if (Event.current.type == EventType.Repaint) GUI.DrawTexture(bottom, footer, ScaleMode.ScaleToFit); }
-            else GUI.Label(bottom, "Their missions endured, and so does their legacy", dateStyle);
+            if (header != null)
+            {
+                if (Event.current.type == EventType.Repaint)
+                    GUI.DrawTexture(top, header, ScaleMode.ScaleToFit);
+            }
+            else
+                GUI.Label(top, "KERBAL MEMORIAL WALL\nIN MEMORY OF OUR FALLEN CREW", emptyStyle);
+            if (footer != null)
+            {
+                if (Event.current.type == EventType.Repaint)
+                    GUI.DrawTexture(bottom, footer, ScaleMode.ScaleToFit);
+            }
+            else
+                GUI.Label(bottom, "Their missions endured, and so does their legacy", dateStyle);
             Rect view = new Rect(x, top.yMax + 5f, w, Mathf.Max(1f, bottom.y - top.yMax - 10f));
             DrawPlaques(view, plaque, 7f, 104f, false);
         }
@@ -180,8 +236,10 @@ namespace KerbalMemorial
             if (Event.current.type == EventType.Repaint)
             {
                 Tint(area, new Color(.34f, .34f, .36f));
-                if (altFull != null) GUI.DrawTexture(area, altFull, ScaleMode.StretchToFill);
-                else Tint(area, new Color(.19f, .19f, .21f));
+                if (altFull != null)
+                    GUI.DrawTexture(area, altFull, ScaleMode.StretchToFill);
+                else
+                    Tint(area, new Color(.19f, .19f, .21f));
             }
 
             // AltWallFull is a cleaned, opaque reference frame. There are no
@@ -205,8 +263,10 @@ namespace KerbalMemorial
                 wallBackgroundWidth = targetWidth;
                 wallBackgroundHeight = targetHeight;
             }
-            if (wallBackground != null) GUI.DrawTexture(area, wallBackground, ScaleMode.StretchToFill);
-            else Tint(area, new Color(.24f, .22f, .21f));
+            if (wallBackground != null)
+                GUI.DrawTexture(area, wallBackground, ScaleMode.StretchToFill);
+            else
+                Tint(area, new Color(.24f, .22f, .21f));
         }
 
         private static Texture2D BuildBackground(int width, int height)
@@ -240,10 +300,12 @@ namespace KerbalMemorial
                     float crackWave = Mathf.Abs(Mathf.Sin((u * 18.0f) + (v * 4.8f) + n2 * 4.3f));
                     float crack = 1f - crackWave;
                     crack = Mathf.SmoothStep(0.82f, 0.98f, crack);
-                    if (crack > 0f) color = Color.Lerp(color, warm, crack * 0.28f);
+                    if (crack > 0f)
+                        color = Color.Lerp(color, warm, crack * 0.28f);
 
                     float speck = Mathf.Clamp01((n4 - 0.78f) / 0.22f);
-                    if (speck > 0f) color = Color.Lerp(color, light, speck * 0.22f);
+                    if (speck > 0f)
+                        color = Color.Lerp(color, light, speck * 0.22f);
 
                     float dx = u - 0.5f;
                     float dy = v - 0.5f;
@@ -268,7 +330,8 @@ namespace KerbalMemorial
             scroll = GUI.BeginScrollView(view, scroll, new Rect(0, 0, width, contentHeight), false, true);
             var used = new HashSet<string>();
             bool paint = Event.current.type == EventType.Repaint;
-            if (records.Count == 0) GUI.Label(new Rect(0, 0, width, view.height), "No lost Kerbals recorded.", alternate ? alternateEmptyStyle : emptyStyle);
+            if (records.Count == 0)
+                GUI.Label(new Rect(0, 0, width, view.height), "No lost Kerbals recorded.", alternate ? alternateEmptyStyle : emptyStyle);
             // Buttons must participate in input events as well as repaint. Keep
             // the same scroll-view geometry for both themes, and decode portraits
             // only during repaint. GUI.Button consumes mouse input before DragWindow.
@@ -278,14 +341,19 @@ namespace KerbalMemorial
                 for (int col = 0; col < columns; col++)
                 {
                     int index = row * columns + col;
-                    if (index >= records.Count) break;
+                    if (index >= records.Count)
+                        break;
                     var r = records[index];
                     Rect card = new Rect(col * (cardWidth + gap), gap + row * (cardHeight + gap), cardWidth, cardHeight);
-                    if (GUI.Button(card, GUIContent.none, GUIStyle.none)) individual.Open(r.Id, rect);
-                    if (!paint) continue;
+                    if (GUI.Button(card, GUIContent.none, GUIStyle.none))
+                        individual.Open(r.Id, rect);
+                    if (!paint)
+                        continue;
                     used.Add(r.Id);
-                    if (alternate) DrawAlternatePlaque(card, r, plaqueTexture);
-                    else DrawPlaque(card, r, plaqueTexture);
+                    if (alternate)
+                        DrawAlternatePlaque(card, r, plaqueTexture);
+                    else
+                        DrawPlaque(card, r, plaqueTexture);
                     if (card.Contains(Event.current.mousePosition))
                     {
                         Color border = alternate ? new Color(.80f, .85f, .90f, .9f) : new Color(.95f, .73f, .44f, .9f);
@@ -298,18 +366,26 @@ namespace KerbalMemorial
             GUI.EndScrollView();
             if (paint)
                 foreach (string key in portraits.Keys.Where(k => !used.Contains(k)).ToArray())
-                { var entry = portraits[key]; Release(ref entry.Texture); portraits.Remove(key); }
+                {
+                    var entry = portraits[key];
+                    Release(ref entry.Texture);
+                    portraits.Remove(key);
+                }
         }
         private void DrawPlaque(Rect card, Casualty r, Texture2D plaqueTexture)
         {
-            if (plaqueTexture != null) GUI.DrawTexture(card, plaqueTexture, ScaleMode.StretchToFill);
-            else Tint(card, new Color(.30f, .20f, .13f));
+            if (plaqueTexture != null)
+                GUI.DrawTexture(card, plaqueTexture, ScaleMode.StretchToFill);
+            else
+                Tint(card, new Color(.30f, .20f, .13f));
             float portraitWidth = Mathf.Min(79f, card.width * .33f);
             Rect picture = new Rect(card.x + 12f, card.y + 12f, portraitWidth, card.height - 24f);
             Tint(picture, new Color(.15f, .10f, .075f));
             var texture = GetPortrait(r);
-            if (texture != null) GUI.DrawTexture(picture, texture, ScaleMode.ScaleToFit);
-            else GUI.Label(picture, "No\nportrait", dateStyle);
+            if (texture != null)
+                GUI.DrawTexture(picture, texture, ScaleMode.ScaleToFit);
+            else
+                GUI.Label(picture, "No\nportrait", dateStyle);
             float tx = picture.xMax + 5f, tw = Mathf.Max(1f, card.xMax - tx - 10f);
             GUI.Label(new Rect(tx, card.y + 8f, tw, 39f), r.Name, nameStyle);
             Tint(new Rect(tx + 4f, card.y + 48f, Mathf.Max(1f, tw - 8f), 1f), new Color(.76f, .52f, .30f));
@@ -319,16 +395,20 @@ namespace KerbalMemorial
 
         private void DrawAlternatePlaque(Rect card, Casualty r, Texture2D plaqueTexture)
         {
-            if (plaqueTexture != null) GUI.DrawTexture(card, plaqueTexture, ScaleMode.StretchToFill);
-            else Tint(card, new Color(.23f, .24f, .26f));
+            if (plaqueTexture != null)
+                GUI.DrawTexture(card, plaqueTexture, ScaleMode.StretchToFill);
+            else
+                Tint(card, new Color(.23f, .24f, .26f));
 
             // Coordinates are normalized to the cleaned 397 x 187 plaque crop.
             // Keep the silver portrait frame, left-aligned lettering and steel
             // divider separate from the Classic bronze plaque presentation.
             Rect picture = AlternateRect(card, 50f, 35f, 106f, 125f);
             var texture = GetPortrait(r);
-            if (texture != null) GUI.DrawTexture(picture, texture, ScaleMode.ScaleToFit);
-            else GUI.Label(picture, "No portrait", alternateEmptyStyle);
+            if (texture != null)
+                GUI.DrawTexture(picture, texture, ScaleMode.ScaleToFit);
+            else
+                GUI.Label(picture, "No portrait", alternateEmptyStyle);
             GUI.Label(AlternateRect(card, 181f, 21f, 178f, 68f), r.Name, alternateNameStyle);
             Tint(AlternateRect(card, 181f, 96f, 178f, 2f), new Color(.76f, .79f, .82f));
             GUI.Label(AlternateRect(card, 181f, 101f, 178f, 30f), MemorialDate(r), alternateDateStyle);
@@ -351,29 +431,51 @@ namespace KerbalMemorial
         {
             var tracker = CasualtyTracker.Instance;
             string status = r.Fatal ? (r.Closed ? "Respawned" : "Fallen") : "Missing";
-            if (tracker != null && !tracker.IsLive(r)) status += " • Archived";
+            if (tracker != null && !tracker.IsLive(r))
+                status += " • Archived";
             return status;
         }
         private Texture2D GetPortrait(Casualty r)
         {
             string data = r.PortraitPng ?? "";
             CachedPortrait p;
-            if (!portraits.TryGetValue(r.Id, out p)) { p = new CachedPortrait(); portraits.Add(r.Id, p); }
-            if (p.Data != data) { Release(ref p.Texture); p.Data = data; p.Texture = PortraitCache.Decode(data); }
+            if (!portraits.TryGetValue(r.Id, out p))
+            {
+                p = new CachedPortrait();
+                portraits.Add(r.Id, p);
+            }
+            if (p.Data != data)
+            {
+                Release(ref p.Texture);
+                p.Data = data;
+                p.Texture = PortraitCache.Decode(data);
+            }
             return p.Texture;
         }
         private static void Tint(Rect area, Color color)
         {
             Color old = GUI.color;
-            GUI.color = color; GUI.DrawTexture(area, Texture2D.whiteTexture); GUI.color = old;
+            GUI.color = color;
+            GUI.DrawTexture(area, Texture2D.whiteTexture);
+            GUI.color = old;
         }
         private void Resize()
         {
             var handle = new Rect(rect.width - 21, rect.height - 21, 20, 20);
-            GUI.Label(handle, "//"); var e = Event.current;
-            if (e.type == EventType.MouseDown && e.button == 0 && handle.Contains(e.mousePosition)) { resizing = true; e.Use(); }
-            if (e.type == EventType.MouseDrag && resizing) { resizeDelta += e.delta; e.Use(); }
-            if (e.rawType == EventType.MouseUp) resizing = false;
+            GUI.Label(handle, "//");
+            var e = Event.current;
+            if (e.type == EventType.MouseDown && e.button == 0 && handle.Contains(e.mousePosition))
+            {
+                resizing = true;
+                e.Use();
+            }
+            if (e.type == EventType.MouseDrag && resizing)
+            {
+                resizeDelta += e.delta;
+                e.Use();
+            }
+            if (e.rawType == EventType.MouseUp)
+                resizing = false;
         }
     }
 }

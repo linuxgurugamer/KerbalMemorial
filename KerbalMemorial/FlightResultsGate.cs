@@ -2,6 +2,8 @@ using System;
 using System.Collections.Generic;
 using UnityEngine;
 
+using static KerbalMemorial.RegisterToolbar;
+
 namespace KerbalMemorial
 {
     // Preserve the stock dialog and its result data. Hide its canvas and block
@@ -17,14 +19,16 @@ namespace KerbalMemorial
             get
             {
                 foreach (var g in held.Values)
-                    if (g != null && g.gameObject.activeInHierarchy) return true;
+                    if (g != null && g.gameObject.activeInHierarchy)
+                        return true;
                 return false;
             }
         }
 
         internal void Hold()
         {
-            if (failed) return;
+            if (failed)
+                return;
             try
             {
                 if (!lookedUp)
@@ -37,24 +41,29 @@ namespace KerbalMemorial
                 foreach (var obj in UnityEngine.Object.FindObjectsOfType(resultsType))
                 {
                     var dialog = obj as Component;
-                    if (dialog == null || !dialog.gameObject.activeInHierarchy) continue;
+                    if (dialog == null || !dialog.gameObject.activeInHierarchy)
+                        continue;
                     var behaviour = dialog as Behaviour;
-                    if (behaviour != null && !behaviour.isActiveAndEnabled) continue;
+                    if (behaviour != null && !behaviour.isActiveAndEnabled)
+                        continue;
                     Hide(dialog.gameObject);
                     // A nested group which ignores its parents can otherwise
                     // bypass the root's alpha and interaction restrictions.
                     foreach (var child in dialog.GetComponentsInChildren<CanvasGroup>(true))
-                        if (child.ignoreParentGroups) Hide(child.gameObject);
+                        if (child.ignoreParentGroups)
+                            Hide(child.gameObject);
                 }
                 // Enforce again after stock UI updates/animations.
-                foreach (var group in held.Values) if (group != null) Suppress(group);
+                foreach (var group in held.Values)
+                    if (group != null)
+                        Suppress(group);
             }
             catch (Exception e)
             {
                 // Fail open rather than strand the player without stock results.
                 failed = true;
                 Release();
-                Debug.LogWarning("[KerbalMemorial] Cannot defer Flight Results: " + e.Message);
+                Log.Warning("[KerbalMemorial] Cannot defer Flight Results: " + e.Message);
             }
         }
 
@@ -86,7 +95,8 @@ namespace KerbalMemorial
         {
             foreach (var group in held.Values)
             {
-                if (group == null) continue;
+                if (group == null)
+                    continue;
                 // Destroy is deferred until end of frame. Make our gate neutral
                 // immediately so the original dialog can render/interact now.
                 group.alpha = 1f;

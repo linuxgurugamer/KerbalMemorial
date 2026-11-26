@@ -11,24 +11,35 @@ namespace KerbalMemorial
     internal sealed class InscriptionCycle
     {
         internal readonly HashSet<string> Used = new HashSet<string>(StringComparer.Ordinal);
-        internal bool Initialized { get; private set; }
+        internal bool Initialized
+        {
+            get;
+            private set;
+        }
         internal void Restore(IEnumerable<string> used)
         {
             Used.Clear();
             foreach (string message in used)
-                if (!string.IsNullOrWhiteSpace(message)) Used.Add(message);
+                if (!string.IsNullOrWhiteSpace(message))
+                    Used.Add(message);
             Initialized = true;
         }
         internal void Seed(IEnumerable<string> existing)
         {
-            if (!Initialized) Restore(existing);
+            if (!Initialized)
+                Restore(existing);
         }
         internal string Pick(IEnumerable<string> messages)
         {
             var pool = messages.Where(m => !string.IsNullOrWhiteSpace(m)).Distinct(StringComparer.Ordinal).ToList();
-            if (pool.Count == 0) return ""; // Do not reset on an empty folder.
+            if (pool.Count == 0)
+                return ""; // Do not reset on an empty folder.
             var unused = pool.Where(m => !Used.Contains(m)).ToList();
-            if (unused.Count == 0) { Used.Clear(); unused = pool; }
+            if (unused.Count == 0)
+            {
+                Used.Clear();
+                unused = pool;
+            }
             string chosen = Inscriptions.Pick(unused);
             Used.Add(chosen);
             Initialized = true;
@@ -48,8 +59,10 @@ namespace KerbalMemorial
         }
         internal void CopyFrom(InscriptionCycles other)
         {
-            if (other.Deceased.Initialized) Deceased.Restore(other.Deceased.Used);
-            if (other.Missing.Initialized) Missing.Restore(other.Missing.Used);
+            if (other.Deceased.Initialized)
+                Deceased.Restore(other.Deceased.Used);
+            if (other.Missing.Initialized)
+                Missing.Restore(other.Missing.Used);
         }
     }
 
@@ -63,17 +76,23 @@ namespace KerbalMemorial
 
         internal static IEnumerable<string> Parse(IEnumerable<string> lines)
         {
-            if (lines == null) yield break;
+            if (lines == null)
+                yield break;
             foreach (string line in lines)
             {
                 string text = (line ?? "").Trim().TrimStart('\uFEFF').Trim();
-                if (text.Length == 0 || heading.IsMatch(text) || divider.IsMatch(text)) continue;
+                if (text.Length == 0 || heading.IsMatch(text) || divider.IsMatch(text))
+                    continue;
                 text = listMarker.Replace(text, "", 1).Trim();
                 // Remove enclosing Markdown emphasis, not punctuation within the message.
                 foreach (string marker in new[] { "***", "___", "**", "__", "*", "_" })
                     if (text.Length > marker.Length * 2 && text.StartsWith(marker, StringComparison.Ordinal) && text.EndsWith(marker, StringComparison.Ordinal))
-                    { text = text.Substring(marker.Length, text.Length - 2 * marker.Length).Trim(); break; }
-                if (text.Length != 0 && !heading.IsMatch(text) && !divider.IsMatch(text)) yield return text;
+                    {
+                        text = text.Substring(marker.Length, text.Length - 2 * marker.Length).Trim();
+                        break;
+                    }
+                if (text.Length != 0 && !heading.IsMatch(text) && !divider.IsMatch(text))
+                    yield return text;
             }
         }
 
@@ -83,60 +102,87 @@ namespace KerbalMemorial
             string[] files;
             try
             {
-                if (!Directory.Exists(directory)) return messages;
+                if (!Directory.Exists(directory))
+                    return messages;
                 files = Directory.GetFiles(directory);
             }
             catch (Exception e)
-            { warning?.Invoke("Cannot enumerate inscriptions: " + e.Message); return messages; }
+            {
+                warning?.Invoke("Cannot enumerate inscriptions: " + e.Message);
+                return messages;
+            }
             foreach (string file in files)
             {
-                if (!string.Equals(Path.GetExtension(file), ".txt", StringComparison.OrdinalIgnoreCase)) continue;
-                try { messages.AddRange(Parse(File.ReadAllLines(file))); }
-                catch (Exception e) { warning?.Invoke("Cannot read inscription file " + Path.GetFileName(file) + ": " + e.Message); }
+                if (!string.Equals(Path.GetExtension(file), ".txt", StringComparison.OrdinalIgnoreCase))
+                    continue;
+                try
+                {
+                    messages.AddRange(Parse(File.ReadAllLines(file)));
+                }
+                catch (Exception e)
+                {
+                    warning?.Invoke("Cannot read inscription file " + Path.GetFileName(file) + ": " + e.Message);
+                }
             }
             return messages;
         }
 
         // Do not mix the two pools, or read old files in the parent directory.
         internal static List<string> ReadStatusPool(string root, bool missing, Action<string> warning = null)
-        { return ReadPool(Path.Combine(root, missing ? "Missing" : "Deceased"), warning); }
+        {
+            return ReadPool(Path.Combine(root, missing ? "Missing" : "Deceased"), warning);
+        }
 
         internal static string Pick(string directory, Action<string> warning = null)
-        { return Pick(ReadPool(directory, warning)); }
+        {
+            return Pick(ReadPool(directory, warning));
+        }
 
         internal static string Pick(IList<string> messages)
-        { return messages == null || messages.Count == 0 ? "" : messages[random.Next(messages.Count)]; }
+        {
+            return messages == null || messages.Count == 0 ? "" : messages[random.Next(messages.Count)];
+        }
 
 
         internal const string MissingMessage = "Missing, but not forgotten";
 
         private static bool IsMissing(Casualty record)
-        { return record != null && !record.Fatal && !record.Closed && record.Status == "Missing"; }
+        {
+            return record != null && !record.Fatal && !record.Closed && record.Status == "Missing";
+        }
 
         // Only reuse a message saved for the same kind of casualty. The new
         // flag distinguishes a real random missing inscription from the old
         // fixed fallback, even if the file contains exactly the same words.
         internal static string FatalMessage(Casualty record)
-        { return record != null && record.Fatal && !record.InscriptionForMissing && !record.InscriptionFromMissingPool ? record.Inscription : null; }
+        {
+            return record != null && record.Fatal && !record.InscriptionForMissing && !record.InscriptionFromMissingPool ? record.Inscription : null;
+        }
 
         internal static string SavedMissingMessage(Casualty record)
-        { return IsMissing(record) && record.InscriptionForMissing && record.InscriptionFromMissingPool ? record.Inscription : null; }
+        {
+            return IsMissing(record) && record.InscriptionForMissing && record.InscriptionFromMissingPool ? record.Inscription : null;
+        }
 
         internal static bool NeedsMessage(Casualty record)
         {
-            if (record == null) return false;
-            if (IsMissing(record)) return string.IsNullOrWhiteSpace(SavedMissingMessage(record));
+            if (record == null)
+                return false;
+            if (IsMissing(record))
+                return string.IsNullOrWhiteSpace(SavedMissingMessage(record));
             return record.InscriptionForMissing || record.InscriptionFromMissingPool || (record.Fatal && string.IsNullOrWhiteSpace(record.Inscription));
         }
 
         internal static bool Assign(Casualty record, Func<string> pick, Func<string> pickMissing = null)
         {
-            if (!NeedsMessage(record)) return false;
+            if (!NeedsMessage(record))
+                return false;
             if (IsMissing(record))
             {
                 string message = pickMissing?.Invoke();
                 bool fromPool = !string.IsNullOrWhiteSpace(message);
-                if (!fromPool) message = MissingMessage;
+                if (!fromPool)
+                    message = MissingMessage;
                 bool updated = record.Inscription != message || !record.InscriptionForMissing || record.InscriptionFromMissingPool != fromPool;
                 record.Inscription = message;
                 record.InscriptionForMissing = true;
@@ -152,9 +198,11 @@ namespace KerbalMemorial
                 record.InscriptionForMissing = false;
                 record.InscriptionFromMissingPool = false;
             }
-            if (!record.Fatal || pick == null) return changed;
+            if (!record.Fatal || pick == null)
+                return changed;
             string tribute = pick();
-            if (string.IsNullOrWhiteSpace(tribute)) return changed;
+            if (string.IsNullOrWhiteSpace(tribute))
+                return changed;
             record.Inscription = tribute;
             return true;
         }
@@ -190,18 +238,22 @@ namespace KerbalMemorial
                     liveIds.Add(record.Id);
                     archive.TryGetValue(record.Id, out archived);
                 }
-                if (FillPair(record, archived, pick, pickMissing)) archiveChanged = true;
+                if (FillPair(record, archived, pick, pickMissing))
+                    archiveChanged = true;
             }
             if (archive != null)
                 foreach (var record in archive.Values)
-                    if (!liveIds.Contains(record.Id) && Assign(record, pick, pickMissing)) archiveChanged = true;
+                    if (!liveIds.Contains(record.Id) && Assign(record, pick, pickMissing))
+                        archiveChanged = true;
             return archiveChanged;
         }
 
         internal static string Display(Casualty record)
         {
-            if (record == null) return "";
-            if (IsMissing(record)) return string.IsNullOrWhiteSpace(SavedMissingMessage(record)) ? MissingMessage : record.Inscription;
+            if (record == null)
+                return "";
+            if (IsMissing(record))
+                return string.IsNullOrWhiteSpace(SavedMissingMessage(record)) ? MissingMessage : record.Inscription;
             // Preserve the original notes-based display if a fatality message is unavailable.
             return record.InscriptionForMissing || record.InscriptionFromMissingPool || string.IsNullOrWhiteSpace(record.Inscription) ? (record.Notes ?? "") : record.Inscription;
         }

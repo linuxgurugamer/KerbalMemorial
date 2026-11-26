@@ -65,6 +65,8 @@
     <Compile Include="Ledger.cs" />
     <Compile Include="Inscriptions.cs" />
     <Compile Include="EditorAccidentSign.cs" />
+    <Compile Include="FlightAccidentSigns.cs" />
+    <Compile Include="RegisterToolbar.cs" />
     <Compile Include="SafetySignArtwork.cs" />
     <Compile Include="MemorialWindow.cs" />
     <Compile Include="MemorialWallWindow.cs" />
@@ -85,6 +87,7 @@
       <LogicalName>KerbalMemorial.Artwork.SignDigits.png</LogicalName>
     </EmbeddedResource>
     <None Include="Artwork\generate_sign.py" />
+    <None Include="Artwork\SignPreview.png" />
     <None Include="Artwork\generate_wall.py" />
     <EmbeddedResource Include="Artwork\WallHeader.png">
       <LogicalName>KerbalMemorial.Artwork.WallHeader.png</LogicalName>

@@ -14,6 +14,8 @@ using System.Linq;
 using System.Reflection;
 using UnityEngine;
 
+using static KerbalMemorial.RegisterToolbar;
+
 namespace KerbalMemorial
 {
     [KSPAddon(KSPAddon.Startup.Instantly, true)]
@@ -33,15 +35,15 @@ namespace KerbalMemorial
             {
                 v = "VersionNotAvailable";
             }
-            Debug.Log("[" + title + "] Version " + v);
+            Log.Info("[" + title + "] Version " + v);
         }
     }
 
     [KSPAddon(KSPAddon.Startup.MainMenu, true)]
     internal class InstallChecker : MonoBehaviour
     {
-    private const string MODNAME = "KerbalMemorial";
-    private const string FOLDERNAME = "KerbalMemorial";
+        private const string MODNAME = "KerbalMemorial";
+        private const string FOLDERNAME = "KerbalMemorial";
         private const string EXPECTEDPATH = FOLDERNAME + "/Plugins";
 
         protected void Start()
@@ -62,9 +64,9 @@ namespace KerbalMemorial
                     false,
                     HighLogic.UISkin
                 );
-                Debug.Log("Incorrect " + MODNAME + " Installation: " + MODNAME + " has been installed incorrectly and will not function properly. All files should be located in KSP/GameData/" + EXPECTEDPATH + ". Do not move any files from inside that folder.\n\nIncorrect path(s):\n" + String.Join("\n", badPaths.ToArray())
+                Log.Info("Incorrect " + MODNAME + " Installation: " + MODNAME + " has been installed incorrectly and will not function properly. All files should be located in KSP/GameData/" + EXPECTEDPATH + ". Do not move any files from inside that folder.\n\nIncorrect path(s):\n" + String.Join("\n", badPaths.ToArray())
 
-                     );
+                );
 
             }
 
@@ -90,7 +92,7 @@ namespace KerbalMemorial
             catch (Exception ex)
             {
                 Debug.LogError("-ERROR- " + this.GetType().FullName + "[" + this.GetInstanceID().ToString("X") + "][" + Time.time.ToString("0.00") + "]: " +
-                   "Exception caught while cleaning up old files.\n" + ex.Message + "\n" + ex.StackTrace );
+                    "Exception caught while cleaning up old files.\n" + ex.Message + "\n" + ex.StackTrace );
 
             }
         }

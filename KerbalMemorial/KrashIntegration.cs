@@ -3,6 +3,8 @@ using System.IO;
 using System.Reflection;
 using UnityEngine;
 
+using static KerbalMemorial.RegisterToolbar;
+
 namespace KerbalMemorial
 {
     // Optional, read-only integration. Do not reference KRASH.dll at build time.
@@ -25,7 +27,8 @@ namespace KerbalMemorial
         private static object Read(MemberInfo member, object target)
         {
             var field = member as FieldInfo;
-            if (field != null) return field.GetValue(target);
+            if (field != null)
+                return field.GetValue(target);
             var property = member as PropertyInfo;
             return property == null ? null : property.GetValue(target, null);
         }
@@ -35,10 +38,12 @@ namespace KerbalMemorial
             foreach (var loaded in AssemblyLoader.loadedAssemblies)
             {
                 var assembly = loaded.assembly;
-                if (assembly == null || !string.Equals(assembly.GetName().Name, "KRASH", StringComparison.OrdinalIgnoreCase)) continue;
+                if (assembly == null || !string.Equals(assembly.GetName().Name, "KRASH", StringComparison.OrdinalIgnoreCase))
+                    continue;
                 installed = true;
                 Type shelter = assembly.GetType("KRASH.KRASHShelter", false);
-                if (shelter != null) persistentMember = FindMember(shelter, "persistent", StaticFlags);
+                if (shelter != null)
+                    persistentMember = FindMember(shelter, "persistent", StaticFlags);
                 break;
             }
             resolved = true;
@@ -50,8 +55,10 @@ namespace KerbalMemorial
             {
                 try
                 {
-                    if (!resolved) Resolve();
-                    if (!installed) return false;
+                    if (!resolved)
+                        Resolve();
+                    if (!installed)
+                        return false;
                     object persistent = Read(persistentMember, null);
                     if (persistent != null && (!(persistent is UnityEngine.Object) || (UnityEngine.Object)persistent != null))
                     {
@@ -62,21 +69,27 @@ namespace KerbalMemorial
                             activeMember = FindMember(type, "shelterSimulationActive", InstanceFlags);
                         }
                         object value = Read(activeMember, persistent);
-                        if (value is bool) return (bool)value;
+                        if (value is bool)
+                            return (bool)value;
                     }
                 }
                 catch (Exception e)
                 {
-                    if (!warned) { Debug.LogWarning("[KerbalMemorial] KRASH state unavailable: " + e.Message); warned = true; }
+                    if (!warned)
+                    {
+                        Log.Warning("[KerbalMemorial] KRASH state unavailable: " + e.Message);
+                        warned = true;
+                    }
                 }
-                if (!installed) return false;
+                if (!installed)
+                    return false;
                 // During scenario initialization the persistent object may not
                 // exist yet. KRASH creates this backup before setting its flag
                 // and deletes it when it restores the game. Only use it if the
                 // live flag is unavailable, never override a known false value.
                 if (!warned && persistentMember == null)
                 {
-                    Debug.LogWarning("[KerbalMemorial] KRASH simulation flag not found; using its revert-file fallback.");
+                    Log.Warning("[KerbalMemorial] KRASH simulation flag not found; using its revert-file fallback.");
                     warned = true;
                 }
                 return !string.IsNullOrEmpty(HighLogic.SaveFolder) && File.Exists(Path.Combine(

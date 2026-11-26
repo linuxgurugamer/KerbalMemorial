@@ -5,7 +5,12 @@ using KerbalMemorial;
 internal static class LedgerTests
 {
     private static int count;
-    private static void Check(bool condition, string name) { if (!condition) throw new Exception(name); count++; }
+    private static void Check(bool condition, string name)
+    {
+        if (!condition)
+            throw new Exception(name);
+        count++;
+    }
     public static void Main()
     {
         var l = new Ledger();
@@ -20,13 +25,18 @@ internal static class LedgerTests
         Check(b.Id != a.Id && l.Records.Count == 2, "Second death separate");
         l.Rename("Jeb", "Jebediah");
         Check(l.Open("Jebediah") == b && a.OriginalName == "Jeb", "Rename keeps original");
-        var c = l.Observe("Bob", "Missing", 40); l.Observe("Bob", "Assigned", 50);
+        var c = l.Observe("Bob", "Missing", 40);
+        l.Observe("Bob", "Assigned", 50);
         Check(c.DisplayStatus == "Returned" && !c.Fatal, "Ordinary missing return");
         var d = l.Observe("Bill", "Dead", 60, false, true);
         Check(d.Fatal && d.UT == -1 && d.DeathUT == -1, "Imported death unknown date");
-        Ledger.Cause(d, "Crash", "Probable", "event"); Ledger.Cause(d, "Impact", "Confirmed", "event"); Ledger.Cause(d, "Unknown", "Unknown", "event");
+        Ledger.Cause(d, "Crash", "Probable", "event");
+        Ledger.Cause(d, "Impact", "Confirmed", "event");
+        Ledger.Cause(d, "Unknown", "Unknown", "event");
         Check(d.Cause == "Impact", "Cause confidence priority");
-        d.Location = new Context { Vessel = "Test" }; var copy = d.Copy(); copy.Location.Vessel = "Other";
+        d.Location = new Context { Vessel = "Test" };
+        var copy = d.Copy();
+        copy.Location.Vessel = "Other";
         Check(d.Location.Vessel == "Test", "Archive snapshot isolated");
         d.PortraitPng = "portrait";
         Check(d.Copy().PortraitPng == "portrait", "Archive copy preserves portrait data");
@@ -63,13 +73,16 @@ internal static class LedgerTests
         Check(Ledger.SafetySignDays(new Casualty[0], double.NaN, 21600) == "--- DAYS", "Sign invalid clock");
         Check(Ledger.SafetySignDays(new Casualty[0], 10, 0) == "--- DAYS", "Sign invalid calendar");
         var flat = new int[64 * 64];
-        var noise = new int[flat.Length]; var stripes = new int[flat.Length];
-        var face = new int[flat.Length]; var random = new Random(123);
+        var noise = new int[flat.Length];
+        var stripes = new int[flat.Length];
+        var face = new int[flat.Length];
+        var random = new Random(123);
         for (int y = 0; y < 64; y++)
             for (int x = 0; x < 64; x++)
             {
                 int i = y * 64 + x;
-                flat[i] = 300; noise[i] = random.Next(766);
+                flat[i] = 300;
+                noise[i] = random.Next(766);
                 stripes[i] = y % 2 == 0 ? 100 : 650;
                 face[i] = (x - 32) * (x - 32) + (y - 32) * (y - 32) < 400 ? 400 : 100;
             }
@@ -82,7 +95,11 @@ internal static class LedgerTests
         Check(parsed.SequenceEqual(new[] { "Reach for the stars.", "Never forgotten.", "Still exploring.", "A plain line." }), "Inscription parser skips headings and list formatting");
         var loss = new Casualty { Status = "Missing", Notes = "Old note" };
         int picks = 0;
-        Func<string> choose = () => { picks++; return "Among the stars."; };
+        Func<string> choose = () =>
+        {
+            picks++;
+            return "Among the stars.";
+        };
         Check(Inscriptions.Assign(loss, choose) && picks == 0 && loss.Inscription == Inscriptions.MissingMessage && loss.InscriptionForMissing, "Missing crew get fixed inscription without a random pick");
         Check(!Inscriptions.Assign(loss, choose) && picks == 0, "Missing inscription remains stable");
         loss.ReportedKilled = true;
@@ -99,12 +116,22 @@ internal static class LedgerTests
         Check(Inscriptions.Assign(legacy, choose), "Previously respawned fatality receives inscription");
         var current = new Casualty { Status = "Dead" };
         var archived = new Casualty { Status = "Dead", Inscription = "Existing archive message" };
-        Check(!Inscriptions.FillPair(current, archived, () => { throw new Exception("Unexpected pick"); }) && current.Inscription == archived.Inscription, "Restore archived inscription without reselection");
+        Check(!Inscriptions.FillPair(current, archived, () =>
+            {
+            throw new Exception("Unexpected pick");
+            }) && current.Inscription == archived.Inscription, "Restore archived inscription without reselection");
         archived.Inscription = "";
-        Check(Inscriptions.FillPair(current, archived, () => { throw new Exception("Unexpected pick"); }) && archived.Inscription == current.Inscription, "Fill archive from current record");
+        Check(Inscriptions.FillPair(current, archived, () =>
+            {
+            throw new Exception("Unexpected pick");
+            }) && archived.Inscription == current.Inscription, "Fill archive from current record");
         current.Inscription = archived.Inscription = "";
         int batchPicks = 0;
-        Check(Inscriptions.FillPair(current, archived, () => { batchPicks++; return "Shared message"; }) && batchPicks == 1 && current.Inscription == archived.Inscription, "One selection for both copies");
+        Check(Inscriptions.FillPair(current, archived, () =>
+            {
+            batchPicks++;
+            return "Shared message";
+            }) && batchPicks == 1 && current.Inscription == archived.Inscription, "One selection for both copies");
         var retry = new Casualty { Status = "Dead" };
         Check(!Inscriptions.Assign(retry, () => "") && Inscriptions.Assign(retry, choose), "Retry after empty pool");
         Check(!Inscriptions.Assign(new Casualty { Status = "Dead" }, () => ""), "Empty pool does not assign");
@@ -113,14 +140,19 @@ internal static class LedgerTests
         var loadedMissing = new Casualty { Status = "Missing" };
         var loadedExisting = new Casualty { Status = "Dead", Inscription = "Keep this" };
         var loadedReported = new Casualty { Status = "Missing", ReportedKilled = true };
-        var oldArchive = loadedDead.Copy(); oldArchive.Inscription = "Saved archive message";
+        var oldArchive = loadedDead.Copy();
+        oldArchive.Inscription = "Saved archive message";
         var archiveOnly = new Casualty { Status = "Dead" };
         var pairedRespawned = loadedRespawned.Copy();
         var loaded = new[] { loadedDead, loadedRespawned, loadedMissing, loadedExisting, loadedReported };
         var loadedArchive = new System.Collections.Generic.Dictionary<string, Casualty>
         { { oldArchive.Id, oldArchive }, { archiveOnly.Id, archiveOnly }, { pairedRespawned.Id, pairedRespawned } };
         int loadPicks = 0;
-        Func<string> loadPick = () => { loadPicks++; return "Load message " + loadPicks; };
+        Func<string> loadPick = () =>
+        {
+            loadPicks++;
+            return "Load message " + loadPicks;
+        };
         Check(Inscriptions.Backfill(loaded, loadedArchive, loadPick), "Loaded list marks changed archive for saving");
         Check(loadedDead.Inscription == oldArchive.Inscription && loadedDead.Inscription == "Saved archive message", "Loaded death recovers saved archive inscription");
         Check(loadedRespawned.Inscription == pairedRespawned.Inscription && !string.IsNullOrWhiteSpace(loadedRespawned.Inscription), "Loaded respawned death receives shared inscription");
@@ -148,8 +180,15 @@ internal static class LedgerTests
         var literal = new Casualty { Status = "Dead" };
         Check(Inscriptions.Assign(literal, () => Inscriptions.MissingMessage) && !literal.InscriptionForMissing && !Inscriptions.Assign(literal, choose), "A matching literal fatality inscription is not a temporary message");
         int missingPicks = 0;
-        Func<string> selectMissing = () => { missingPicks++; return "Still searching."; };
-        Func<string> neverPick = () => { throw new Exception("Wrong inscription pool or unexpected reselection"); };
+        Func<string> selectMissing = () =>
+        {
+            missingPicks++;
+            return "Still searching.";
+        };
+        Func<string> neverPick = () =>
+        {
+            throw new Exception("Wrong inscription pool or unexpected reselection");
+        };
         var randomMissing = new Casualty { Status = "Missing" };
         Check(Inscriptions.Assign(randomMissing, neverPick, selectMissing) && randomMissing.InscriptionForMissing && randomMissing.InscriptionFromMissingPool && Inscriptions.Display(randomMissing) == "Still searching.", "Missing uses its own pool and displays saved message");
         Check(!Inscriptions.Assign(randomMissing, neverPick, neverPick) && missingPicks == 1, "Saved missing inscription is stable");
@@ -161,7 +200,11 @@ internal static class LedgerTests
         var missingLive = new Casualty { Status = "Missing" };
         var missingCopy = missingLive.Copy();
         int pairedPicks = 0;
-        Check(Inscriptions.FillPair(missingLive, missingCopy, neverPick, () => { pairedPicks++; return "Awaiting your return."; }) && pairedPicks == 1 && missingLive.Inscription == missingCopy.Inscription && missingCopy.InscriptionFromMissingPool, "Live and archive missing records share one selection");
+        Check(Inscriptions.FillPair(missingLive, missingCopy, neverPick, () =>
+            {
+            pairedPicks++;
+            return "Awaiting your return.";
+            }) && pairedPicks == 1 && missingLive.Inscription == missingCopy.Inscription && missingCopy.InscriptionFromMissingPool, "Live and archive missing records share one selection");
         var missingReload = new Casualty { Status = "Missing", Id = missingCopy.Id };
         Check(!Inscriptions.FillPair(missingReload, missingCopy, neverPick, neverPick) && missingReload.Inscription == missingCopy.Inscription && missingReload.InscriptionFromMissingPool, "Restore random missing message from archive");
         var mixedDeath = new Casualty { Status = "Dead", Id = missingLive.Id };
@@ -192,7 +235,11 @@ internal static class LedgerTests
             Check(Inscriptions.ReadStatusPool(directory, true).OrderBy(x => x).SequenceEqual(new[] { "Awaiting your return.", "Still searching." }), "Missing pool contains only missing messages");
             Check(Inscriptions.Assign(new Casualty { Status = "Missing" }, neverPick, () => Inscriptions.Pick(Inscriptions.ReadStatusPool(directory, true))), "Assignment works with actual missing files");
         }
-        finally { if (Directory.Exists(directory)) Directory.Delete(directory, true); }
+        finally
+        {
+            if (Directory.Exists(directory))
+                Directory.Delete(directory, true);
+        }
         Check(Ledger.PreferCause("Overheating", "Confirmed", "Part destroyed", "Probable"), "Overheat overrides generic destruction");
         Check(!Ledger.PreferCause("Part destroyed", "Probable", "Overheating", "Confirmed"), "Generic destruction cannot replace overheat");
         Check(Ledger.PreferCause("Vessel collision", "Probable", "Crash", "Probable"), "Specific cause wins confidence tie");
@@ -270,12 +317,27 @@ internal static class LedgerTests
         Check(delayed.Observe(a, false, false, 10, true) && !delayed.IsReady(11.499), "Plaque waits default 1.5 real seconds");
         Check(delayed.Observe(b, false, false, 10.5, true, 2.5) && delayed.IsReady(11.5), "First plaque retains its original deadline");
         Check(delayed.Acknowledge(a.Id) && !delayed.IsReady(12.999) && delayed.IsReady(13), "Second plaque uses its configured death-relative delay");
+        var crossfade = new FatalityPlaqueQueue();
+        crossfade.Observe(a, false, false, 10, true, 0);
+        Check(!crossfade.TryAdvanceForCrossfade(a.Id, 10) && crossfade.Count == 1, "Last plaque remains queued during fade-out");
+        crossfade.Observe(b, false, false, 10, true, 2);
+        Check(!crossfade.TryAdvanceForCrossfade(b.Id, 12) && crossfade.Current == a.Id, "Wrong plaque cannot crossfade");
+        Check(!crossfade.TryAdvanceForCrossfade(a.Id, 11.999) && crossfade.Count == 2, "Crossfade honors next death deadline");
+        Check(crossfade.TryAdvanceForCrossfade(a.Id, 12) && crossfade.Current == b.Id && crossfade.Count == 1, "Ready successor becomes queue head while old plaque fades");
+        Check(!crossfade.TryAdvanceForCrossfade(a.Id, 13) && crossfade.Count == 1, "Repeated close cannot advance again");
+        Check(!crossfade.TryAdvanceForCrossfade(b.Id, 13), "Final plaque cannot crossfade to absent successor");
+        Check(crossfade.Acknowledge(b.Id) && crossfade.Count == 0, "Final acknowledgement drains queue");
         var immediate = new FatalityPlaqueQueue();
         Check(immediate.Observe(a, false, false, 10, true, 0) && immediate.IsReady(10), "Zero delay is immediately ready");
         var maximum = new FatalityPlaqueQueue();
         Check(maximum.Observe(a, false, false, 10, true, 5) && !maximum.IsReady(14.999) && maximum.IsReady(15), "Maximum five-second delay");
         Check(FatalityPlaqueQueue.ClampDelay(-1) == 0 && FatalityPlaqueQueue.ClampDelay(8) == 5, "Invalid range is clamped");
         Check(FatalityPlaqueQueue.ClampDelay(double.NaN) == 1.5 && FatalityPlaqueQueue.ClampDelay(double.PositiveInfinity) == 5 && FatalityPlaqueQueue.ClampDelay(double.NegativeInfinity) == 0, "Non-finite saved delays are safe");
+        Check(FatalityPlaqueQueue.DefaultFadeDuration == 2f, "Default fade is two seconds");
+        Check(FatalityPlaqueQueue.ClampFadeDuration(0) == 0 && FatalityPlaqueQueue.ClampFadeDuration(5) == 5, "Fade includes both endpoints");
+        Check(FatalityPlaqueQueue.ClampFadeDuration(1.7) == 1.7, "Custom fade duration retained");
+        Check(FatalityPlaqueQueue.ClampFadeDuration(-1) == 0 && FatalityPlaqueQueue.ClampFadeDuration(8) == 5, "Invalid fade range clamped");
+        Check(FatalityPlaqueQueue.ClampFadeDuration(double.NaN) == 2 && FatalityPlaqueQueue.ClampFadeDuration(double.PositiveInfinity) == 5 && FatalityPlaqueQueue.ClampFadeDuration(double.NegativeInfinity) == 0, "Non-finite saved fades are safe");
         delayed.Clear();
         Check(delayed.Count == 0 && !delayed.IsReady(99), "Disabling presentation clears pending plaques");
         Console.WriteLine(count + " assertions passed");

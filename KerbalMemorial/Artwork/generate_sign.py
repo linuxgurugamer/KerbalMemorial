@@ -1,57 +1,67 @@
-"""Regenerate embedded sign artwork. Requires Pillow and a bold TrueType font.
-Usage: python generate_sign.py /path/to/DejaVuSans-Bold.ttf
-The generated PNGs are included; Python/font are not required to build the mod.
+"""Regenerate the editor sign board and per-card digit atlas.
+Requires Pillow, NumPy, OpenCV and a bold TrueType font. The original preview
+is SignPreview.png; generated PNGs are embedded, with no runtime dependencies.
+Usage: python generate_sign.py /path/to/LiberationSans-Bold.ttf
 """
 from pathlib import Path
 import sys
+import cv2
+import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 
 OUT = Path(__file__).resolve().parent
-FONT = sys.argv[1] if len(sys.argv) > 1 else 'DejaVuSans-Bold.ttf'
-# Logical artwork is 3:2. Sample at 2x, then resample horizontally into a
-# square power-of-two GPU texture. The world-space quad restores 3:2.
-S = 2
-W, H = 1536, 1024
-BG, WHITE, INK = '#1c5736', '#f8f9f2', '#18281e'
-CARD, EDGE, ROD = '#228550', '#14502d', '#2a3e2f'
-img = Image.new('RGBA', (W*S,H*S), BG)
-d = ImageDraw.Draw(img)
-def rect(x,y,w,h,r,fill):
-    d.rounded_rectangle((x*S,y*S,(x+w)*S-1,(y+h)*S-1),radius=r*S,fill=fill)
-def circle(x,y,r,fill):
-    d.ellipse(((x-r)*S,(y-r)*S,(x+r)*S,(y+r)*S),fill=fill)
-def label(draw, text, cx, cy, maxw, maxh, color):
-    # Fit the real glyph outline and center its ink, not its baseline.
-    size = round(maxh*S*1.4)
-    while True:
-        f=ImageFont.truetype(FONT,size)
-        l,t,r,b=draw.textbbox((0,0),text,font=f)
-        if r-l <= maxw*S and b-t <= maxh*S: break
-        size -= 2
-    draw.text((round(cx*S-(r+l)/2),round(cy*S-(b+t)/2)),text,font=f,fill=color)
-rect(24,24,1488,976,30,'#e1e9df')
-rect(39,39,1458,946,24,WHITE)
-xs=[90,321,552,783]
-rect(110,104,862,14,7,ROD)
-for x in xs:
-    for hx in (x+50,x+160):
-        rect(hx-5,112,10,128,5,ROD)
-    rect(x+9,231+11,210,308,17,'#c5cec3')
-    rect(x,231,210,308,17,EDGE)
-    rect(x+5,236,200,298,14,CARD)
-    for hx in (x+50,x+160):
-        circle(hx,245,10,'#e6eee4'); circle(hx,245,4,ROD)
-label(d,'DAYS',1230,390,396,126,INK)
-label(d,'SINCE LAST',768,660,1260,152,INK)
-label(d,'ACCIDENT',768,855,1260,175,INK)
-img.resize((2048,2048),Image.Resampling.LANCZOS).save(OUT/'SignBoard.png',optimize=True)
-# All tiles cover only the uniform interior of the card. Blank tile clears a
-# previous digit without modifying hooks, corners, shadows or the board.
-tw,th=162,204
-atlas=Image.new('RGBA',(tw*S*4,th*S*3),CARD)
-for i,c in enumerate('0123456789- '):
-    if c==' ': continue
-    tile=Image.new('RGBA',(tw*S,th*S),CARD)
-    label(ImageDraw.Draw(tile),c,tw/2,th/2,tw-12,th-12,WHITE)
-    atlas.paste(tile,((i%4)*tw*S,(i//4)*th*S))
-atlas.resize((216*4,408*3),Image.Resampling.LANCZOS).save(OUT/'SignDigits.png',optimize=True)
+FONT = sys.argv[1] if len(sys.argv) > 1 else 'LiberationSans-Bold.ttf'
+WIDTH = 2048
+HEIGHT = 2048
+TILE_WIDTH = 192
+TILE_HEIGHT = 440
+TILE_TOP = 1150
+TILE_X = (883, 1149, 1416, 1683)
+
+# Rectify the photographed sign, retaining the 3:2 physical aspect.
+source = np.asarray(Image.open(OUT / 'SignPreview.png').convert('RGB'))
+quad = np.float32([[55, 78], [1427, 128], [1435, 918], [47, 942]])
+flat_quad = np.float32([[0, 0], [1535, 0], [1535, 1023], [0, 1023]])
+flat = cv2.warpPerspective(source, cv2.getPerspectiveTransform(quad, flat_quad), (1536, 1024))
+board = Image.fromarray(flat).resize((WIDTH, HEIGHT), Image.Resampling.LANCZOS)
+# Remove the example digits while retaining each card's own aged paper texture.
+for x in TILE_X:
+    box = (x, TILE_TOP, x + TILE_WIDTH, TILE_TOP + TILE_HEIGHT)
+    patch = np.asarray(board.crop(box)).copy()
+    gray = cv2.cvtColor(patch, cv2.COLOR_RGB2GRAY)
+    mask = (gray < 155).astype(np.uint8) * 255
+    mask = cv2.dilate(mask, np.ones((19, 13), np.uint8))
+    alpha = cv2.GaussianBlur(mask, (15, 15), 0).astype(np.float32)[:, :, None] / 255
+    # Interpolate from the clean strips at each side of the number.
+    left = np.median(patch[:, :10], axis=1).astype(np.float32)
+    right = np.median(patch[:, -10:], axis=1).astype(np.float32)
+    left = cv2.GaussianBlur(left.reshape(-1, 1, 3), (1, 41), 0)
+    right = cv2.GaussianBlur(right.reshape(-1, 1, 3), (1, 41), 0)
+    weight = np.linspace(0, 1, TILE_WIDTH, dtype=np.float32)[None, :, None]
+    fill = left * (1 - weight) + right * weight
+    clean = np.uint8(np.clip(patch * (1 - alpha) + fill * alpha, 0, 255))
+    board.paste(Image.fromarray(clean), (x, TILE_TOP))
+board.save(OUT / 'SignBoard.png', optimize=True)
+
+# Twelve columns (0-9, dash, blank) and four rows, one row per card.
+# The four cards have different backgrounds, so each gets its own tiles.
+atlas = Image.new('RGB', (TILE_WIDTH * 12, TILE_HEIGHT * 4))
+font = ImageFont.truetype(FONT, 440)
+for slot, x in enumerate(TILE_X):
+    blank = board.crop((x, TILE_TOP, x + TILE_WIDTH, TILE_TOP + TILE_HEIGHT))
+    for index, char in enumerate('0123456789- '):
+        tile = blank.copy()
+        if char != ' ':
+            bbox = font.getbbox(char)
+            mask = Image.new('L', (bbox[2] - bbox[0], bbox[3] - bbox[1]))
+            ImageDraw.Draw(mask).text((-bbox[0], -bbox[1]), char, font=font, fill=255)
+            # Fit a consistent physical numeral width/height. The square GPU
+            # texture is stretched back to 3:2 in the editor.
+            digit_height = 370 if char != '-' else 62
+            digit_width = 151 if char != '-' else 126
+            if char == '1':
+                digit_width = 120
+            mask = mask.resize((digit_width, digit_height), Image.Resampling.LANCZOS)
+            tile.paste((30, 29, 28), ((TILE_WIDTH - digit_width) // 2, (TILE_HEIGHT - digit_height) // 2), mask)
+        atlas.paste(tile, (index * TILE_WIDTH, slot * TILE_HEIGHT))
+atlas.save(OUT / 'SignDigits.png', optimize=True)
