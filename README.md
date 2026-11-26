@@ -15,6 +15,7 @@ A **"Days Since Last Accident"** safety sign can be displayed in the VAB and SPH
 KRASH simulations are ignored automatically, and other mods can report confirmed fatalities through an optional integration API.
 
 ---
+
 # Dependencies
 
 - ModuleManager
