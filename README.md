@@ -89,6 +89,10 @@ Themes can be changed from either:
 ---
 
 # Individual Memorial Plaques
+<p align="center">
+  <img src="Images/MemorialWallClassic.png" alt="Plaque" width="49%" />
+  <img src="Images/MemorialWallAlternate.png" alt="Plaque" width="49%" />
+</p>
 
 Clicking a plaque opens an individual memorial view containing:
 
