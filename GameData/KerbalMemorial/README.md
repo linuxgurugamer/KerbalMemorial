@@ -224,15 +224,20 @@ Signs can be adjusted from:
 
 or
 
-**Settings / Help → Outdoor Sign Settings**
+**Settings / Help → Outdoor Accident Sign Settings**
 
 You can modify:
 
 - Position
 - Rotation
 - Offsets
+- Width (1–5 m)
+- Height above ground (0.1–10 m)
+- Wall or Posts mounting
 
-Changes are applied in real time.
+Position, X/Y offsets and rotation are hidden by default. Enable **Show position and rotation** at the top of the outdoor settings window to display these fields and their explanatory text. Width, height and mounting remain visible.
+
+Changes are applied in real time; Save or Close preserves them. Wall mounting removes the posts; use the existing placement controls to align the board with the wall. Indoor settings are available under **Settings / Help → Indoor Accident Sign Settings**.
 
 Additional sign locations can be added through configuration files without recompiling the mod.
 

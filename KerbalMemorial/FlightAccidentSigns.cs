@@ -19,9 +19,11 @@ namespace KerbalMemorial
         internal static FlightAccidentSigns Instance { get; private set; }
         private const float OffsetLimit = 1000f;
         private const string OverrideNode = "KERBAL_MEMORIAL_OUTDOOR_SIGN_SETTINGS";
-        private Rect settingsRect = new Rect(60f, 90f, 580f, 330f);
+        private Rect settingsRect = new Rect(60f, 90f, 580f, 480f);
         private Vector2 settingsScroll;
         private bool settingsOpen, settingsDirty;
+        private bool showPlacementControls;
+        private bool showPlacementControlsForLayout;
         private string settingsMessage = "";
         private static string SettingsPath => Path.Combine(KSPUtil.ApplicationRootPath,
             "GameData", "KerbalMemorial", "PluginData", "OutdoorSignSettings.cfg");
@@ -458,19 +460,22 @@ namespace KerbalMemorial
             properties.SetVector("_MainTex_ST", new Vector4(1f, 1f, 0f, 0f));
             boardRenderer.SetPropertyBlock(properties, 0);
             AddSolidCollider(backing, collisionLayer);
-            for (int i = 0; i < 2; ++i)
+            if (site.PostMounted)
             {
-                float x = (i == 0 ? -1f : 1f) * width * .28f;
-                float bottom = Vector3.Dot(feet[i] - center, up);
-                float top = -height * .28f;
-                float length = Mathf.Max(.01f, top - bottom);
-                float footHeight = Mathf.Min(diameter * .35f, length);
-                GameObject post = Geometry("Support post " + (i + 1), site.Board.transform, postMesh, steelMaterial,
-                    new Vector3(x, bottom + length * .5f, postDepth), new Vector3(diameter, length, diameter));
-                AddSolidCollider(post, collisionLayer);
-                GameObject foot = Geometry("Support foot " + (i + 1), site.Board.transform, postMesh, steelMaterial,
-                    new Vector3(x, bottom + footHeight * .5f, postDepth), new Vector3(diameter * 1.6f, footHeight, diameter * 1.6f));
-                AddSolidCollider(foot, collisionLayer);
+                for (int i = 0; i < 2; ++i)
+                {
+                    float x = (i == 0 ? -1f : 1f) * width * .28f;
+                    float bottom = Vector3.Dot(feet[i] - center, up);
+                    float top = -height * .28f;
+                    float length = Mathf.Max(.01f, top - bottom);
+                    float footHeight = Mathf.Min(diameter * .35f, length);
+                    GameObject post = Geometry("Support post " + (i + 1), site.Board.transform, postMesh, steelMaterial,
+                        new Vector3(x, bottom + length * .5f, postDepth), new Vector3(diameter, length, diameter));
+                    AddSolidCollider(post, collisionLayer);
+                    GameObject foot = Geometry("Support foot " + (i + 1), site.Board.transform, postMesh, steelMaterial,
+                        new Vector3(x, bottom + footHeight * .5f, postDepth), new Vector3(diameter * 1.6f, footHeight, diameter * 1.6f));
+                    AddSolidCollider(foot, collisionLayer);
+                }
             }
             // Preserve world size when parenting; inherit facility relocation,
             // not the vessel's moving coordinate frame. Solid colliders inherit it too.
@@ -626,6 +631,9 @@ namespace KerbalMemorial
                     node.AddValue("xOffsetMeters", FormatNumber(site.XOffset));
                     node.AddValue("yOffsetMeters", FormatNumber(site.YOffset));
                     node.AddValue("rotationDegrees", FormatNumber(site.RotationDegrees));
+                    node.AddValue("widthMeters", FormatNumber(site.Width));
+                    node.AddValue("heightAboveGround", FormatNumber(site.Clearance));
+                    node.AddValue("postMounted", site.PostMounted ? "true" : "false");
                 }
                 string path = SettingsPath;
                 string temp = path + ".tmp";
@@ -658,6 +666,8 @@ namespace KerbalMemorial
                 return;
             foreach (Site site in sites)
                 site.ResetText();
+            showPlacementControls = false;
+            showPlacementControlsForLayout = false;
             settingsOpen = true;
         }
 
@@ -666,40 +676,67 @@ namespace KerbalMemorial
             if (!settingsOpen || !HighLogic.LoadedSceneIsFlight)
                 return;
             settingsRect.width = Mathf.Min(580f, Screen.width);
-            settingsRect.height = Mathf.Min(330f, Screen.height);
+            settingsRect.height = Mathf.Min(480f, Screen.height);
             settingsRect.x = Mathf.Clamp(settingsRect.x, 0f, Screen.width - settingsRect.width);
             settingsRect.y = Mathf.Clamp(settingsRect.y, 0f, Screen.height - settingsRect.height);
             settingsRect = ClickThruBlocker.GUILayoutWindow(id, settingsRect, DrawSettings,
-                "Outdoor Sign Settings", GUILayout.Width(settingsRect.width), GUILayout.Height(settingsRect.height));
+                "Outdoor Accident Sign Settings", GUILayout.Width(settingsRect.width), GUILayout.Height(settingsRect.height));
         }
 
         private void DrawSettings(int id)
         {
-            GUILayout.Label("X: east (+) / west (-). Y: north (+) / south (-). Angle: clockwise from north.");
-            using (new GUILayout.HorizontalScope())
+            // Keep the conditional IMGUI layout consistent across input and repaint events.
+            if (Event.current.type == EventType.Layout)
             {
-                GUILayout.Label("Site", GUILayout.Width(150f));
-                GUILayout.Label("X (m)", GUILayout.Width(122f));
-                GUILayout.Label("Y (m)", GUILayout.Width(122f));
-                GUILayout.Label("Degrees", GUILayout.Width(122f));
+                showPlacementControlsForLayout = showPlacementControls;
+            }
+            showPlacementControls = GUILayout.Toggle(showPlacementControls, "Show position and rotation");
+            if (showPlacementControlsForLayout)
+            {
+                GUILayout.Label("X: east (+) / west (-). Y: north (+) / south (-). Angle: clockwise from north.");
+                GUILayout.Label("Wall removes the supports; use the offsets to align the board with a wall.");
+                using (new GUILayout.HorizontalScope())
+                {
+                    GUILayout.Label("Site", GUILayout.Width(150f));
+                    GUILayout.Label("X (m)", GUILayout.Width(122f));
+                    GUILayout.Label("Y (m)", GUILayout.Width(122f));
+                    GUILayout.Label("Degrees", GUILayout.Width(122f));
+                }
             }
             settingsScroll = GUILayout.BeginScrollView(settingsScroll, GUILayout.ExpandHeight(true));
             foreach (Site site in sites)
             {
+                bool changed = false;
                 using (new GUILayout.HorizontalScope())
                 {
                     string status = !site.Enabled ? " (off)" : site.Board == null ? " (unloaded)" : "";
                     GUILayout.Label(site.Name + status, GUILayout.Width(150f));
-                    bool changed = NumberField(ref site.XOffset, ref site.XText, -OffsetLimit, OffsetLimit, 1f);
-                    changed |= NumberField(ref site.YOffset, ref site.YText, -OffsetLimit, OffsetLimit, 1f);
-                    changed |= NumberField(ref site.RotationDegrees, ref site.RotationText, 0f, 360f, 5f);
-                    if (changed)
+                    if (showPlacementControlsForLayout)
                     {
-                        site.PlacementChanged = true;
-                        settingsDirty = true;
-                        settingsMessage = "";
+                        changed |= NumberField(ref site.XOffset, ref site.XText, -OffsetLimit, OffsetLimit, 1f);
+                        changed |= NumberField(ref site.YOffset, ref site.YText, -OffsetLimit, OffsetLimit, 1f);
+                        changed |= NumberField(ref site.RotationDegrees, ref site.RotationText, 0f, 360f, 5f);
                     }
                 }
+                changed |= DimensionSlider("Width", ref site.Width, 1f, 5f);
+                changed |= DimensionSlider("Height above ground", ref site.Clearance, .1f, 10f);
+                using (new GUILayout.HorizontalScope())
+                {
+                    GUILayout.Label("Mounting", GUILayout.Width(150f));
+                    bool posts = GUILayout.SelectionGrid(site.PostMounted ? 1 : 0, new[] { "Wall", "Posts" }, 2) == 1;
+                    if (posts != site.PostMounted)
+                    {
+                        site.PostMounted = posts;
+                        changed = true;
+                    }
+                }
+                if (changed)
+                {
+                    site.PlacementChanged = true;
+                    settingsDirty = true;
+                    settingsMessage = "";
+                }
+                GUILayout.Space(10f);
             }
             GUILayout.EndScrollView();
             GUILayout.Label(string.IsNullOrEmpty(settingsMessage) ? "Changes apply live. Save or Close to keep them." : settingsMessage);
@@ -713,6 +750,27 @@ namespace KerbalMemorial
                 GUILayout.FlexibleSpace();
             }
             GUI.DragWindow();
+        }
+
+        // Do not overwrite larger/smaller dimensions loaded from a config just
+        // because the narrower settings slider is being displayed.
+        private static bool DimensionSlider(string label, ref float value, float min, float max)
+        {
+            using (new GUILayout.HorizontalScope())
+            {
+                GUILayout.Label(label, GUILayout.Width(150f));
+                float displayed = Mathf.Clamp(value, min, max);
+                float selected = GUILayout.HorizontalSlider(displayed, min, max, GUILayout.ExpandWidth(true));
+                bool changed = selected != displayed;
+                if (changed)
+                {
+                    float next = Mathf.Clamp(Mathf.Round(selected * 10f) / 10f, min, max);
+                    changed = next != value;
+                    value = next;
+                }
+                GUILayout.Label(SignSettings.Format(value) + " m", GUILayout.Width(64f));
+                return changed;
+            }
         }
 
         // Keep incomplete numeric edits (e.g. a lone minus sign) in the field
@@ -778,6 +836,7 @@ namespace KerbalMemorial
             internal bool PlacementChanged;
             internal float Bearing = 90f, Width = 4f, Clearance = 2f, FrontOffset = 1f, LateralOffset = 1f;
             internal bool Enabled = true, Warned;
+            internal bool PostMounted = true;
             internal string BuildingId;
             internal GameObject Board;
             internal DestructibleBuilding Building;
@@ -803,6 +862,8 @@ namespace KerbalMemorial
                 if (bool.TryParse(node.GetValue("enabled"), out bool enabled))
                     Enabled = enabled;
                 BuildingId = node.GetValue("buildingId");
+                if (bool.TryParse(node.GetValue("postMounted"), out bool posts))
+                    PostMounted = posts;
                 Bearing = Read(node, "frontBearing", Bearing, 0f, 360f);
                 Width = Read(node, "widthMeters", Width, .5f, 30f);
                 Clearance = Read(node, "heightAboveGround", Clearance, .1f, 20f);
@@ -822,6 +883,10 @@ namespace KerbalMemorial
                 XOffset = Read(node, "xOffsetMeters", XOffset, -OffsetLimit, OffsetLimit);
                 YOffset = Read(node, "yOffsetMeters", YOffset, -OffsetLimit, OffsetLimit);
                 RotationDegrees = Read(node, "rotationDegrees", RotationDegrees, 0f, 360f);
+                Width = Read(node, "widthMeters", Width, .5f, 30f);
+                Clearance = Read(node, "heightAboveGround", Clearance, .1f, 20f);
+                if (bool.TryParse(node.GetValue("postMounted"), out bool posts))
+                    PostMounted = posts;
             }
 
             internal void ResetText()

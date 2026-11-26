@@ -1,3 +1,9 @@
+# 0.1.0.58
+- Hide outdoor X/Y offsets, rotation and their explanatory text and column headings by default; add a Show position and rotation toggle. Keep width, height and mounting controls visible.
+
+# 0.1.0.57
+- Rename the Settings / Help buttons and window titles to Indoor Accident Sign Settings and Outdoor Accident Sign Settings. Add per-site live width, ground clearance and Wall/Posts controls to the outdoor window, preserving X/Y and rotation adjustments and saving the new settings with the existing overrides.
+
 # 0.1.0.56
 - Update the default outdoor sign X/Y offsets and rotation angles for all eight sites using the supplied placement settings.
 

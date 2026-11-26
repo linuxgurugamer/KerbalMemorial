@@ -208,3 +208,15 @@ Use a disposable save, with and without Missing Crew Respawn enabled. Back up th
 - Save or Close; restart flight and KSP and verify per-site overrides persist. Confirm a sign without a rotation override defaults to its front bearing. Delete override file with KSP closed to restore base values.
 - Check the front has live artwork and the rear and four edges are plain steel. Verify face direction at 0/90/180/270 degrees. Confirm indoor signs are unchanged.
 - Check F2, pause, queued death plaques, scene changes and rapid numeric edits. Verify there are no duplicate meshes or colliders and no IMGUI errors.
+
+
+## Indoor/outdoor accident sign settings (0.1.0.57)
+- Open Settings / Help: verify both renamed buttons in flight and the indoor button in the editor. Check the matching window titles.
+- In flight, open either Outdoor Signs or Outdoor Accident Sign Settings. For each configured site, check X, Y, degrees, width, height above ground and Wall/Posts. Resize one board, verify the aspect ratio and counter, change clearance and check posts and feet follow. Verify other sites stay unchanged.
+- Toggle Wall: the board and board collider remain at the same position, with no posts, feet or support colliders. Adjust offsets to align the board with a wall. Toggle Posts and verify both supports and their colliders return.
+- Save/Close, reload flight and verify dimensions, mounting, offsets and rotation persist. Old overrides missing the new keys must retain base dimensions and mounting. Open/close with out-of-slider-range base values without changing them; verify they remain unchanged.
+
+## Optional outdoor placement controls (0.1.0.58)
+- Open Outdoor Accident Sign Settings from either entry point. Verify X/Y/rotation, their column headings and both introductory labels are hidden; the unchecked Show position and rotation toggle, site names, width, height, mounting and Save/Close remain visible.
+- Enable the toggle and verify all placement fields, headings and explanatory text appear. Adjust a site, disable and re-enable the toggle, and verify its values and position are retained. Repeat while scrolling and check for IMGUI layout errors.
+- Save and close with the toggle off, reopen and verify it defaults to off. Verify all saved placement values and other settings persist across flight reloads.

@@ -51,7 +51,7 @@ namespace KerbalMemorial
             rect.width = Mathf.Min(410f, Screen.width);
             rect.x = Mathf.Clamp(rect.x, 0f, Mathf.Max(0f, Screen.width - rect.width));
             rect.y = Mathf.Clamp(rect.y, 0f, Mathf.Max(0f, Screen.height - rect.height));
-            rect = ClickThruBlocker.GUILayoutWindow(id, rect, Draw, "Accident Sign Settings", GUILayout.Width(rect.width));
+            rect = ClickThruBlocker.GUILayoutWindow(id, rect, Draw, "Indoor Accident Sign Settings", GUILayout.Width(rect.width));
         }
 
         private void Draw(int id)

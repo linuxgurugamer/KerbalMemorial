@@ -631,9 +631,9 @@ namespace KerbalMemorial
             GUILayout.Space(10);
             GUILayout.Label("Missing is not automatically a fatality. An explicit crew-killed event or Dead status confirms a death. A confirmed fatality remains counted if a Kerbal respawns. Ordinary returns from MIA are not fatalities. Archived incidents do not alter gameplay. Context and inferred causes are best effort; unknown values are not fabricated.", wrap);
             GUILayout.Label("CSV exports all currently visible history (not just the search results).", wrap);
-            if (GUILayout.Button("Accident Sign Settings", GUILayout.Width(190)))
+            if (GUILayout.Button("Indoor Accident Sign Settings", GUILayout.Width(245)))
                 signSettings.Open(rect);
-            if (HighLogic.LoadedSceneIsFlight && GUILayout.Button("Outdoor Sign Settings", GUILayout.Width(190)))
+            if (HighLogic.LoadedSceneIsFlight && GUILayout.Button("Outdoor Accident Sign Settings", GUILayout.Width(245)))
                 openOutdoorRequested = true;
             GUILayout.EndScrollView();
         }
