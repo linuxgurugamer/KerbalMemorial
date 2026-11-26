@@ -210,6 +210,37 @@ The sign appears in:
 - Wall-mounted or freestanding layouts
 - Separate settings for VAB and SPH
 
+![Indoor Accident Sign Settings](./Images/IndoorAccidentSignSettings.png)
+## Configuration
+
+![Outdoor Accident Sign Settings](./Images/OutdoorAccidentSignSettings.png)
+
+Signs can be adjusted from:
+
+**Kerbal Memorial → Indoor Signs**
+
+or
+
+**Settings / Help → Indoor Accident Sign Settings**
+
+Both for the VAB and SPH you can modify:
+
+- Width (1–5 m)
+- Height above ground (0.1–10 m)
+- Wall or Posts mounting
+
+Position, X/Y offsets and rotation are hidden by default. Enable **Show position and rotation** at the top of the outdoor settings window to display these fields and their explanatory text. Width, height and mounting remain visible.
+
+Changes are applied in real time; Save or Close preserves them. Wall mounting removes the posts; use the existing placement controls to align the board with the wall. Indoor settings are available under **Settings / Help → Indoor Accident Sign Settings**.
+
+Additional sign locations can be added through configuration files without recompiling the mod.
+
+
+
+
+
+
+
 Changes update immediately and are saved automatically.
 
 ---
@@ -234,6 +265,8 @@ Optional outdoor accident signs can be placed throughout the Kerbal Space Center
 These signs display the same accident-day counter used indoors.
 
 ## Configuration
+
+![Outdoor Accident Sign Settings](./Images/OutdoorAccidentSignSettings.png)
 
 Signs can be adjusted from:
 
