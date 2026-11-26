@@ -17,10 +17,10 @@ KRASH simulations are ignored automatically, and other mods can report confirmed
 ---
 # Dependencies
 
-### ModuleManager
-### ClickThroughBlocker
-### ToolbarController
-### SpaceTuxLibrary
+- ModuleManager
+- ClickThroughBlocker
+- ToolbarController
+- SpaceTuxLibrary
 
 ---
 
