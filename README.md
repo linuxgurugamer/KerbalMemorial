@@ -55,9 +55,10 @@ Select **Kerbal Memorial** at the bottom of the wall to open the main ledger, wh
 
 # Memorial Wall
 
-![Memorial Wall](./Images/MemorialWallClassic.png)  ![Memorial Wall](./Images/MemorialWallAlternate.png) 
-
-
+<p align="center">
+  <img src="Images/MemorialWallClassic.png" alt="Memorial Wall" width="49%" />
+  <img src="Images/MemorialWallAlternate.png" alt="Memorial Wall" width="49%" />
+</p>
 
 The Memorial Wall replaces the fictional plaques from the original artwork with real memorials generated from your save.
 
