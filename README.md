@@ -1,5 +1,11 @@
 # Kerbal Memorial
 
+<p align="center">
+  <img src="Images/Classic.png" alt="Memorial Wall" width="49%" />
+  <img src="Images/Alternate.png" alt="Memorial Wall" width="49%" />
+</p>
+
+
 **Kerbal Memorial** is a Kerbal Space Program 1 mod that remembers the Kerbals who didn't make it home.
 
 The mod automatically tracks crew losses, records what happened, and creates memorial plaques displaying the Kerbal's portrait, name, date of death, and a memorial inscription. It also keeps detailed accident records, casualty statistics, and optional permanent archives that survive quickloads and reverts.
