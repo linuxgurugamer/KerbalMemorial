@@ -62,6 +62,13 @@ Select **Kerbal Memorial** at the bottom of the wall to open the main ledger, wh
 
 The Memorial Wall replaces the fictional plaques from the original artwork with real memorials generated from your save.
 
+# Plaques
+
+<p align="center">
+  <img src="Images/PlaqueClassic.png" alt="Plaque" width="49%" />
+  <img src="Images/PlaqueAlternate.png" alt="Plaque" width="49%" />
+</p>
+
 Each plaque can display:
 
 - Portrait
@@ -216,10 +223,6 @@ The sign appears in:
 ![Outdoor Accident Sign Settings](./Images/OutdoorAccidentSignSettings.png)
 
 Signs can be adjusted from:
-
-**Kerbal Memorial → Indoor Signs**
-
-or
 
 **Settings / Help → Indoor Accident Sign Settings**
 
