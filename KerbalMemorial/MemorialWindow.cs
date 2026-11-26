@@ -194,6 +194,8 @@ namespace KerbalMemorial
             {
                 if (presentingDeath != queue.Current)
                 {
+                    if (!queue.TryStart(queue.Current, Time.realtimeSinceStartup))
+                        return;
                     DeathPlaque.Close();
                     presentingDeath = queue.Current;
                     DeathPlaque.Open(presentingDeath, new Rect(0f, Screen.height * .18f, Screen.width, Screen.height), fadeSeconds: CasualtyTracker.Options.deathPlaqueFadeDuration);
@@ -208,6 +210,7 @@ namespace KerbalMemorial
                         DeathPlaque.BeginClose();
                         deathPlaqueUsesB = !deathPlaqueUsesB;
                         presentingDeath = queue.Current;
+                        queue.TryStart(presentingDeath, Time.realtimeSinceStartup);
                         DeathPlaque.Open(presentingDeath, placement, fadeSeconds: CasualtyTracker.Options.deathPlaqueFadeDuration, alignToParent: true);
                     }
                     else if (queue.Count == 1)
@@ -216,7 +219,7 @@ namespace KerbalMemorial
                         DeathPlaque.BeginClose();
                     }
                     // If the next queued death is not yet ready, hold this plaque
-                    // at full opacity until its configured death delay expires.
+                    // at full opacity until its configured quiet interval expires.
                 }
             }
             if (presentingDeath == null)
@@ -609,7 +612,7 @@ namespace KerbalMemorial
             s.showDeathPlaques = GUILayout.Toggle(s.showDeathPlaques, "Show memorial plaque on death");
             using (new GUILayout.HorizontalScope())
             {
-                GUILayout.Label("Death plaque delay", GUILayout.Width(145));
+                GUILayout.Label(new GUIContent("Death plaque delay", "Seconds of quiet after the last accident event before a new plaque appears."), GUILayout.Width(145));
                 float delay = (float)FatalityPlaqueQueue.ClampDelay(s.deathPlaqueDelay);
                 s.deathPlaqueDelay = Mathf.Round(GUILayout.HorizontalSlider(delay,
                     FatalityPlaqueQueue.MinDelay, FatalityPlaqueQueue.MaxDelay, GUILayout.ExpandWidth(true)) * 10f) / 10f;

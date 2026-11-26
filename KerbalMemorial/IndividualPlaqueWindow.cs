@@ -1,9 +1,8 @@
+using ClickThroughFix;
 using System;
 using System.IO;
 using System.Linq;
-using ClickThroughFix;
 using UnityEngine;
-
 using static KerbalMemorial.RegisterToolbar;
 
 namespace KerbalMemorial
@@ -224,11 +223,28 @@ namespace KerbalMemorial
 
         private void DrawContents()
         {
+            if (record == null)
+                return;
+
             if (label == null)
             {
-                label = new GUIStyle(GUI.skin.label) { alignment = TextAnchor.MiddleCenter, fontStyle = FontStyle.Bold, wordWrap = false, richText = false, clipping = TextClipping.Clip, padding = new RectOffset(0,0,0,0) };
-                inscription = new GUIStyle(label) { fontStyle = FontStyle.Normal, wordWrap = true, alignment = TextAnchor.MiddleCenter };
+                label = new GUIStyle(GUI.skin.label)
+                {
+                    alignment = TextAnchor.MiddleCenter,
+                    fontStyle = FontStyle.Bold,
+                    wordWrap = false,
+                    richText = false,
+                    clipping = TextClipping.Clip,
+                    padding = new RectOffset(0, 0, 0, 0)
+                };
+                inscription = new GUIStyle(label)
+                {
+                    fontStyle = FontStyle.Normal,
+                    wordWrap = true,
+                    alignment = TextAnchor.MiddleCenter
+                };
             }
+
             Rect area = new Rect(8f, 24f, rect.width - 16f, rect.height - 64f);
             Texture2D artwork = alternate ? industrial : classic;
             // The normalized overlay coordinates are specific to each template.
@@ -236,13 +252,14 @@ namespace KerbalMemorial
             Rect name = alternate ? Section(area, .29f, .105f, .64f, .19f) : Section(area, .357f, .115f, .515f, .17f);
             Rect date = alternate ? Section(area, .29f, .33f, .64f, .18f) : Section(area, .405f, .327f, .425f, .17f);
             Rect notes = alternate ? Section(area, .042f, .663f, .916f, .275f) : Section(area, .065f, .59f, .87f, .27f);
-            Color ink = alternate ? new Color(.96f,.97f,.98f) : new Color(1f,.81f,.48f);
+            Color ink = alternate ? new Color(.96f, .97f, .98f) : new Color(1f, .81f, .48f);
+
             if (Event.current.type == EventType.Repaint)
             {
                 if (artwork != null)
                     GUI.DrawTexture(area, artwork, ScaleMode.StretchToFill);
                 else
-                    Fill(area, alternate ? new Color(.22f,.24f,.27f) : new Color(.25f,.16f,.09f));
+                    Fill(area, alternate ? new Color(.22f, .24f, .27f) : new Color(.25f, .16f, .09f));
                 if (portrait != null)
                     GUI.DrawTexture(picture, portrait, ScaleMode.ScaleToFit);
                 else
@@ -250,13 +267,22 @@ namespace KerbalMemorial
                 FitLabel(name, record.Name ?? "Unknown", ink, Mathf.Max(12, Mathf.RoundToInt(area.width * .057f)));
                 double ut = record.Fatal && record.DeathUT >= 0 ? record.DeathUT : record.UT;
                 string when = ut < 0 || double.IsNaN(ut) || double.IsInfinity(ut) ? "Date unknown" : KSPUtil.PrintDateCompact(ut, false);
-                FitLabel(date, when, ink, Mathf.Max(12, Mathf.RoundToInt(area.width * .042f)));
+
                 if (alternate)
-                    Fill(Section(area, .31f, .305f, .60f, .003f), new Color(.75f,.77f,.79f));
+                {
+                    Fill(Section(area, .31f, .305f, .60f, .003f), new Color(.75f, .77f, .79f));
+                }
             }
+
             // Use the middle 80% of the inscription panel, with a large
             // font for short inscriptions and wrapping for longer messages.
             DrawInscription(notes, Inscriptions.Display(record), ink);
+
+            // Hide the buttons during fade-in and while plaques overlap.
+            // Keep the artwork dimensions fixed so the plaque does not jump.
+            if ((fading && !closing) || !interactionAllowed)
+                return;
+
             // Keep the footer controls centered as a group and outside the artwork.
             float buttonWidth = Mathf.Min(110f, Mathf.Max(1f, (rect.width - 24f) / 2f));
             float left = (rect.width - (buttonWidth * 2f + 8f)) / 2f;
@@ -307,7 +333,7 @@ namespace KerbalMemorial
 
         private static Rect Section(Rect a, float x, float y, float w, float h)
         {
-            return new Rect(a.x + x*a.width, a.y + y*a.height, w*a.width, h*a.height);
+            return new Rect(a.x + x * a.width, a.y + y * a.height, w * a.width, h * a.height);
         }
         private void FitLabel(Rect area, string text, Color color, int size)
         {
@@ -315,7 +341,7 @@ namespace KerbalMemorial
             label.fontSize = size;
             while (label.fontSize > 7 && (label.CalcSize(content).x > area.width || label.CalcSize(content).y > area.height))
                 label.fontSize--;
-            label.normal.textColor = new Color(0,0,0,.85f);
+            label.normal.textColor = new Color(0, 0, 0, .85f);
             GUI.Label(new Rect(area.x + 1, area.y + 2, area.width, area.height), content, label);
             label.normal.textColor = color;
             GUI.Label(area, content, label);
@@ -354,7 +380,7 @@ namespace KerbalMemorial
                     using (var data = new MemoryStream())
                     {
                         stream.CopyTo(data);
-                        texture = new Texture2D(2,2,TextureFormat.RGBA32,false);
+                        texture = new Texture2D(2, 2, TextureFormat.RGBA32, false);
                         if (!texture.LoadImage(data.ToArray(), true))
                             throw new InvalidOperationException("Invalid artwork: " + name);
                     }

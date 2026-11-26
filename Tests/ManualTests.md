@@ -102,8 +102,27 @@ Use a disposable save, with and without Missing Crew Respawn enabled. Back up th
 - Click either toolbar icon: only the Memorial Wall opens. Click Kerbal Memorial in its footer: the main ledger opens, with no Memorial Wall button beside its tabs. Verify the wall remains open and the toolbar stays active. Close the ledger; verify the wall and its plaque windows remain open and the ledger’s Sign Settings window closes. Reopen the ledger from the wall; verify its previous position is retained.
 - Open the ledger, Sign Settings and a wall plaque with Details. Close the wall: all associated windows close and the toolbar turns off. Repeat by toggling the toolbar off. Toggle on again: only the wall opens. Verify the wall works with an empty ledger, both themes, hidden theme button, pause/F2 and scene changes.
 
+## Splashed destruction (0.1.0.62)
+- Destroy an occupied part while its vessel is SPLASHED and above the seabed; verify Drowned and the stock situation evidence. Repeat with an EVA Kerbal. Confirm splashdown without a fatality creates no death record, and destruction during FLYING, ORBITING or LANDED does not receive Drowned.
+- Test generic damage and specific stock damage reports before and after splashed destruction: Drowned should remain unless Lynched/Buried is detected or an authoritative external report is provided. Check that unrelated crew, historical imports and KRASH simulations are unaffected. If the part has lost its vessel reference before destruction, retain the existing cause rather than guessing its situation.
+
+## Orbital EVA fallback (0.1.0.61)
+- Exit a hatch in orbit, then induce a confirmed death without specific failure evidence. Expect Spaced, Probable, within one calendar day; after a day or with no observed departure, expect Possible. Repeat using Kerbin/Earth time settings, time warp and a life-support mod that does not report a cause.
+- Save and reload while on EVA; verify the departure time persists. Board and exit again; verify the new timestamp is used. Quickload to before departure, switch scenes, and check no timestamp from an abandoned timeline or KRASH simulation is applied.
+- Verify a non-orbiting EVA, a crewed vessel, missing-only records and historical imports are not classified Spaced. Test specific heat, collision, high-G, terrain and external reports both before and after generic destruction; the known cause must win.
+
+## Underground destruction (0.1.0.60)
+- Destroy an occupied loaded part with its origin at least 0.5 m below local PQS terrain; verify Lynched/Buried and altitude, terrain elevation and penetration depth in the evidence. Repeat with EVA and on elevated terrain.
+- Test normal surface contact, a part above terrain, an underwater part above the seabed, and bodies without PQS; none should receive the burial label. Check that late stock impact and thermal events do not overwrite burial, external causes remain authoritative, unrelated crew are unaffected, and KRASH produces no records. Unloaded vessels retain existing vessel-level classifications.
+
+## Finer stock cause classification (0.1.0.59)
+- Overheat occupied parts below 10,000 K and at/above 10,000 K; expect Cooked and Atomized respectively. Verify evidence contains the stock report and internal/skin temperatures. Repeat in EVA. Verify the actual stock event parameter represents temperature and impact speed in your installation.
+- Crash an occupied part below and at/above twice its crash tolerance; confirm Stomped (1) only for the latter with usable speed evidence. Confirm a later generic ground impact report does not replace the specific classification.
+- Destroy an occupied part at 15 g or more without impacting; expect Stomped (2). Repeat with impact reports before and after the destruction event; expect the impact classification instead. Below 15 g retain the original cause classification.
+- Verify unrelated events, surviving Kerbals, KRASH simulations and imported historical records do not create or reclassify fatalities; an explicit external API cause stays authoritative.
+
 ## Stock cause classification (0.1.0.30)
-- Overheat an occupied part; verify overheating and temperature evidence, and that generic part destruction does not replace it. Repeat in EVA.
+- Overheat an occupied part; verify Cooked or Atomized and temperature evidence, and that generic part destruction does not replace it. Repeat in EVA.
 - Enable stock part G/pressure limits and exceed them on an occupied part; verify respective failure classifications only if a casualty occurs.
 - Test fatal splashdown, ground impact and vessel collisions (including EVA); ambiguous collision targets must remain generic.
 - Break an occupied part joint under high dynamic pressure and at low pressure, with a casualty; verify probable aerodynamic breakup or structural failure respectively. Ordinary staging without a casualty must not add records.
@@ -220,3 +239,14 @@ Use a disposable save, with and without Missing Crew Respawn enabled. Back up th
 - Open Outdoor Accident Sign Settings from either entry point. Verify X/Y/rotation, their column headings and both introductory labels are hidden; the unchecked Show position and rotation toggle, site names, width, height, mounting and Save/Close remain visible.
 - Enable the toggle and verify all placement fields, headings and explanatory text appear. Adjust a site, disable and re-enable the toggle, and verify its values and position are retained. Repeat while scrolling and check for IMGUI layout errors.
 - Save and close with the toggle off, reopen and verify it defaults to off. Verify all saved placement values and other settings persist across flight reloads.
+
+## Accident quiet interval (0.1.0.63)
+- Set the death plaque delay to 1.5 seconds. Kill a Kerbal and allow uncrewed parts to explode in succession. The first plaque should start fading in only 1.5 real-time seconds after the last explosion or accident event, not the death itself.
+- Test subsequent fatalities and collisions before the first plaque starts; all pending entries should restart their individual quiet intervals. After the first plaque starts, additional accidents must not hide it or interrupt its fade. A requested crossfade waits for the next plaque's quiet interval.
+- Test zero and five-second delays, multiple deaths, automatic Flight Results pause, KRASH, quickload and disabling automatic plaques. Flight Results stays held during the quiet interval and all transitions. A flight without confirmed casualties must not generate automatic plaques.
+- Events are scene-wide while plaques are pending because the stock explosion notification has no vessel identity. Normal physics updates and roster scans of already confirmed deaths do not restart the timer.
+
+## Automatic plaque button visibility (0.1.0.64)
+- Confirm a death with a 2-second fade in both themes. During fade-in, neither Close nor Details should be drawn or clickable. Verify they appear at full opacity without changing the artwork dimensions.
+- Queue multiple fatalities and close the first plaque. Neither footer should be visible while the two plaques overlap; the incoming buttons should appear when its fade and the overlap are finished.
+- With zero fade duration or a manually opened plaque, both buttons must be visible immediately. Verify the final fade-out, delay, pause handling and Flight Results gating remain unchanged.

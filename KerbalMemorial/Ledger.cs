@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
+using System.Text.RegularExpressions;
 
 namespace KerbalMemorial
 {
@@ -46,6 +47,8 @@ namespace KerbalMemorial
     public sealed class Context
     {
         public string Vessel = "", VesselId = "", Part = "", PartTitle = "", PartId = "", Body = "", Situation = "", EVA = "", Quality = "";
+        public double EvaDepartureUT = -1;
+        internal double ObservedRealtime = -1;
         public double UT = -1, Latitude = double.NaN, Longitude = double.NaN, Altitude = double.NaN, Speed = double.NaN, Gee = double.NaN, MET = double.NaN;
         public Context Copy()
         {
@@ -139,12 +142,186 @@ namespace KerbalMemorial
                 r.Source = source;
             }
         }
+        // Only parse a number adjacent to its unit. Do not mistake a part name,
+        // timestamp, stage number or unrelated number for temperature or speed.
+        public static double ReportMeasurement(string message, bool temperature)
+        {
+            if (string.IsNullOrEmpty(message))
+                return double.NaN;
+            string unit = temperature ? @"(?:K|Kelvin)" : @"(?:m/s|m\s*/\s*s|m\s+s-1)";
+            var matches = Regex.Matches(message, @"(?<![\w.,+-])(?<value>[+]?(?:[0-9]{1,3}(?:,[0-9]{3})+|[0-9]+)(?:\.[0-9]+)?(?:[eE][+-]?[0-9]+)?)\s*" + unit + @"(?![\w/])", RegexOptions.IgnoreCase);
+            foreach (Match match in matches)
+            {
+                if (double.TryParse(match.Groups["value"].Value, NumberStyles.Float | NumberStyles.AllowThousands, CultureInfo.InvariantCulture, out double value) && FinitePositive(value))
+                    return value;
+            }
+            return double.NaN;
+        }
+        private static bool FinitePositive(double value)
+        {
+            return value > 0 && !double.IsInfinity(value) && !double.IsNaN(value);
+        }
+        public static double EventMeasurement(string message, double parameter, bool temperature)
+        {
+            double reported = ReportMeasurement(message, temperature);
+            if (FinitePositive(reported))
+                return reported;
+            return FinitePositive(parameter) ? parameter : double.NaN;
+        }
+        // Called only for a stock overheating event, not ordinary telemetry.
+        public static string ThermalCause(double reported, double internalTemp, double internalLimit, double skinTemp, double skinLimit)
+        {
+            if (ExtremeHeat(reported, double.NaN) || ExtremeHeat(internalTemp, internalLimit) || ExtremeHeat(skinTemp, skinLimit))
+                return "Atomized";
+            return "Cooked";
+        }
+        private static bool ExtremeHeat(double temperature, double limit)
+        {
+            return FinitePositive(temperature) && temperature >= 10000 && (!FinitePositive(limit) || temperature > limit);
+        }
+        public static string ImpactCause(string fallback, double impactSpeed, double crashTolerance)
+        {
+            if (FinitePositive(impactSpeed) && FinitePositive(crashTolerance) && impactSpeed / crashTolerance >= 2.0)
+                return "Stomped (1)";
+            return fallback;
+        }
+        public static string DestructionCause(string fallback, double gee, bool impacting)
+        {
+            if (!impacting && FinitePositive(gee) && gee >= 15.0)
+                return "Stomped (2)";
+            return fallback;
+        }
+        public const string BuriedCause = "Buried";
+        public const string DrownedCause = "Drowned";
+        // Allow half a meter for PQS approximation and normal contact.
+        public static bool IsBuried(double partAltitude, double terrainAltitude)
+        {
+            if (double.IsNaN(partAltitude) || double.IsInfinity(partAltitude) ||
+                double.IsNaN(terrainAltitude) || double.IsInfinity(terrainAltitude))
+                return false;
+            double depth = terrainAltitude - partAltitude;
+            return !double.IsInfinity(depth) && depth >= 0.5;
+        }
+        public static bool IsImpactEvidence(string cause, string source)
+        {
+            switch (cause)
+            {
+                case "Stomped (1)":
+                case "Crash":
+                case "Collision":
+                case "Vessel collision":
+                case "Ground impact":
+                case "Unloaded vessel terrain impact":
+                case "Water impact":
+                case "EVA ground impact":
+                case "EVA collision":
+                case "EVA water impact":
+                    return true;
+            }
+            if (string.IsNullOrEmpty(source))
+                return false;
+            foreach (string entry in source.Split(new[] { " | " }, StringSplitOptions.None))
+            {
+                foreach (string name in new[] { "onCrash", "onCollision", "onCrashSplashdown", "onPartExplodeGroundCollision", "onVesselExplodeGroundCollision" })
+                {
+                    if (entry == name || entry.StartsWith(name + ":", StringComparison.Ordinal) || entry.StartsWith(name + ";", StringComparison.Ordinal) || entry.StartsWith(name + " (", StringComparison.Ordinal))
+                        return true;
+                }
+            }
+            return false;
+        }
+        public const string SpacedCause = "Spaced";
+        public static bool IsUnexplainedEvaCause(string cause)
+        {
+            return string.IsNullOrEmpty(cause) || cause == "Unknown" || cause == "Part destroyed" || cause == "EVA accident — unknown cause" || cause == SpacedCause;
+        }
+        public static bool FreshDeathContext(Context context, double deathUT)
+        {
+            return context != null && context.UT >= 0 && deathUT >= 0 && Math.Abs(deathUT - context.UT) <= 5.0;
+        }
+        public static bool RecentEvaContext(Context context, double deathUT, double realtime)
+        {
+            if (FreshDeathContext(context, deathUT))
+                return true;
+            // A high-warp roster scan may span many game seconds. Only trust a
+            // recent observation in this running scene, never a persisted clock.
+            return context != null && context.EVA == "True" && context.UT >= 0 && context.UT <= deathUT &&
+                context.ObservedRealtime >= 0 && realtime >= context.ObservedRealtime && realtime - context.ObservedRealtime <= 2.0;
+        }
+        public static bool ApplySpaced(Casualty record, int secondsPerDay, double realtime = -1)
+        {
+            if (record == null || !record.Fatal || record.Imported || record.Closed || record.ExternalCause ||
+                !IsUnexplainedEvaCause(record.Cause) || record.Cause == SpacedCause ||
+                IsImpactEvidence(record.Cause, record.Source) || !RecentEvaContext(record.Location, record.DeathUT, realtime))
+                return false;
+            var context = record.Location;
+            if (context.EVA != "True" || context.Situation != "ORBITING")
+                return false;
+            double elapsed = record.DeathUT - context.EvaDepartureUT;
+            bool knownDeparture = context.EvaDepartureUT >= 0 && elapsed >= 0 && !double.IsInfinity(elapsed) && !double.IsNaN(elapsed);
+            bool recent = knownDeparture && secondsPerDay > 0 && elapsed <= secondsPerDay;
+            record.Cause = SpacedCause;
+            record.Confidence = recent && FreshDeathContext(context, record.DeathUT) ? "Probable" : "Possible";
+            string evidence = "Orbital EVA death; no specific cause identified";
+            if (knownDeparture)
+                evidence += "; time since hatch departure " + elapsed.ToString("F1", CultureInfo.InvariantCulture) + " s" +
+                    (recent ? " (within one game-calendar day)" : "");
+            else
+                evidence += "; hatch departure time unavailable";
+            if (!FreshDeathContext(context, record.DeathUT))
+                evidence += "; last observed orbit before time-warped death";
+            record.Source = MergeEvidence(record.Source, evidence);
+            return true;
+        }
+        // Use only within the existing matching-part and fresh-evidence checks.
+        public static bool PreferEvidence(string candidate, string confidence, string source, string existing, string existingConfidence, string existingSource)
+        {
+            if (existingConfidence == "Confirmed" && CauseSpecificity(existing) == 0)
+                return false;
+            // A measured underground destruction is more specific than any
+            // ordinary stock cause, regardless of event arrival order.
+            if (candidate == BuriedCause || existing == BuriedCause)
+                return candidate == BuriedCause && existing != BuriedCause;
+            // Destruction while SPLASHED is a specific stock classification.
+            // Preserve it even if generic damage reports arrive later.
+            if (candidate == DrownedCause || existing == DrownedCause)
+                return candidate == DrownedCause && existing != DrownedCause;
+            bool impact = IsImpactEvidence(candidate, source);
+            bool hadImpact = IsImpactEvidence(existing, existingSource);
+            if (candidate == "Stomped (2)" && (impact || hadImpact))
+                return false;
+            // Spaced is a fallback, never a competing specific failure. A later
+            // matched failure report wins even if its confidence is only Possible.
+            if (existing == SpacedCause)
+                return !IsUnexplainedEvaCause(candidate);
+            if (candidate == SpacedCause)
+                return existing != SpacedCause && IsUnexplainedEvaCause(existing) && !IsImpactEvidence(existing, existingSource);
+            if (existing == "Stomped (2)" && impact && candidate != "Stomped (2)")
+                return true;
+            if (candidate == "Stomped (1)" && hadImpact && existing != "Stomped (1)" && IsImpactEvidence(existing, ""))
+                return true;
+            if (existing == "Stomped (1)" && IsImpactEvidence(candidate, "") && candidate != "Stomped (1)")
+                return false;
+            return PreferCause(candidate, confidence, existing, existingConfidence);
+        }
         // Stock evidence is more useful when a specific failure replaces a
         // generic destruction report at the same confidence level.
         public static int CauseSpecificity(string cause)
         {
             switch (cause)
             {
+                case BuriedCause:
+                    return 110;
+                case DrownedCause:
+                    return 105;
+                case "Atomized":
+                    return 100;
+                case "Cooked":
+                    return 90;
+                case "Stomped (1)":
+                    return 80;
+                case "Stomped (2)":
+                    return 60;
                 case "Overheating":
                 case "EVA overheating":
                 case "Excessive G-force (structural failure)":
@@ -169,6 +346,8 @@ namespace KerbalMemorial
                 case "Collision":
                 case "Left for dead":
                     return 15;
+                case SpacedCause:
+                    return 13;
                 case "EVA accident — unknown cause":
                     return 12;
                 case "Crash":

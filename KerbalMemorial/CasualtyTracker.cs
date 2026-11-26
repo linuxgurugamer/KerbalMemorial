@@ -42,6 +42,8 @@ namespace KerbalMemorial
         private readonly Dictionary<string, Context> snapshots = new Dictionary<string, Context>();
         private readonly Dictionary<string, RS> seen = new Dictionary<string, RS>();
         private readonly Dictionary<string, Hint> hints = new Dictionary<string, Hint>();
+        // Key by EVA part flight ID, which persists with the EVA vessel across saves.
+        private readonly Dictionary<string, double> evaDepartures = new Dictionary<string, double>();
         private sealed class Hint
         {
             public string Cause, Confidence, Source;
@@ -77,8 +79,11 @@ namespace KerbalMemorial
             GameEvents.onKerbalStatusChanged.Add(StatusChanged);
             GameEvents.onKerbalNameChanged.Add(Renamed);
             GameEvents.onCrewKilled.Add(Killed);
+            GameEvents.onCrewOnEva.Add(CrewOnEva);
+            GameEvents.onCrewBoardVessel.Add(CrewBoarded);
             GameEvents.onFlightReady.Add(FlightReady);
             GameEvents.onPartDie.Add(PartDied);
+            GameEvents.onPartExplode.Add(PartExploded);
             GameEvents.onPartExplodeGroundCollision.Add(GroundImpact);
             GameEvents.onCrash.Add(Crash);
             GameEvents.onOverheat.Add(Overheat);
@@ -103,8 +108,11 @@ namespace KerbalMemorial
                 GameEvents.onKerbalStatusChanged.Remove(StatusChanged);
                 GameEvents.onKerbalNameChanged.Remove(Renamed);
                 GameEvents.onCrewKilled.Remove(Killed);
+                GameEvents.onCrewOnEva.Remove(CrewOnEva);
+                GameEvents.onCrewBoardVessel.Remove(CrewBoarded);
                 GameEvents.onFlightReady.Remove(FlightReady);
                 GameEvents.onPartDie.Remove(PartDied);
+                GameEvents.onPartExplode.Remove(PartExploded);
                 GameEvents.onPartExplodeGroundCollision.Remove(GroundImpact);
                 GameEvents.onCrash.Remove(Crash);
                 GameEvents.onOverheat.Remove(Overheat);
@@ -138,6 +146,16 @@ namespace KerbalMemorial
             portraits.Read(node);
             snapshots.Clear();
             hints.Clear();
+            evaDepartures.Clear();
+            foreach (var departure in node.GetNodes("EVA_DEPARTURE"))
+            {
+                string partId = departure.GetValue("partId");
+                if (!string.IsNullOrEmpty(partId) && partId != "0" &&
+                    double.TryParse(departure.GetValue("ut"), System.Globalization.NumberStyles.Float,
+                        System.Globalization.CultureInfo.InvariantCulture, out double ut) &&
+                    ut >= 0 && !double.IsInfinity(ut))
+                    evaDepartures[partId] = ut;
+            }
             seen.Clear();
             initialized = archiveLoaded = archiveDirty = wasPermanent = archiveCycleAdopted = false;
             Error = null;
@@ -165,6 +183,13 @@ namespace KerbalMemorial
             Persistence.Write(node, Live.Records);
             Persistence.WriteCycles(node, inscriptionCycles);
             portraits.Write(node);
+            node.RemoveNodes("EVA_DEPARTURE");
+            foreach (var departure in evaDepartures.OrderBy(pair => pair.Key))
+            {
+                var child = node.AddNode("EVA_DEPARTURE");
+                child.AddValue("partId", departure.Key);
+                child.AddValue("ut", departure.Value.ToString("R", System.Globalization.CultureInfo.InvariantCulture));
+            }
         }
         public void Start()
         {
@@ -285,6 +310,8 @@ namespace KerbalMemorial
         {
             if (!Active || c == null || oldStatus == newStatus)
                 return;
+            if (Lost(newStatus))
+                NoteAccidentActivity();
             if (Lost(newStatus) || (Alive(newStatus) && Lost(oldStatus)))
                 Record(c, newStatus, false, false, "Roster status event");
             if (newStatus == RS.Available)
@@ -321,10 +348,36 @@ namespace KerbalMemorial
                 d[to] = value;
             }
         }
+        private void CrewOnEva(GameEvents.FromToAction<Part, Part> action)
+        {
+            if (!Active || action.to == null || action.to.flightID == 0)
+                return;
+            evaDepartures[action.to.flightID.ToString()] = Now;
+            foreach (var crew in action.to.protoModuleCrew)
+                if (crew != null)
+                    Store(crew.name, FromVessel(action.to.vessel, action.to, "EVA departure event"));
+        }
+        private void CrewBoarded(GameEvents.FromToAction<Part, Part> action)
+        {
+            if (!Active || action.from == null || action.from.flightID == 0)
+                return;
+            string partId = action.from.flightID.ToString();
+            evaDepartures.Remove(partId);
+            // The old orbital EVA snapshot is no longer valid after boarding,
+            // even if the next vessel scan has not happened yet.
+            foreach (string name in snapshots.Where(pair => pair.Value.PartId == partId).Select(pair => pair.Key).ToArray())
+            {
+                snapshots.Remove(name);
+                hints.Remove(name);
+            }
+            if (action.to != null)
+                CaptureVessel(action.to.vessel, "Boarding event");
+        }
         private void Killed(EventReport report)
         {
             if (!Active || report == null)
                 return;
+            NoteAccidentActivity();
             // Do not infer a casualty from all crew in report.origin: a report can describe one person only.
             var crew = Roster().FirstOrDefault(c => c != null && c.name == report.sender);
             if (crew == null)
@@ -345,23 +398,114 @@ namespace KerbalMemorial
         {
             if (Active && crew != null)
             {
+                NoteAccidentActivity();
                 SetHint(crew.name, "Left for dead", "Probable", "Left-for-dead event", null);
                 if (Lost(crew.rosterStatus))
                     Record(crew, crew.rosterStatus, false, false, "Left-for-dead event");
             }
         }
+        // The stock explosion notification has no part/vessel identity, so
+        // use a scene-wide quiet interval while a fatality plaque is pending.
+        // Never postpone an already visible plaque or change casualty evidence.
+        private void NoteAccidentActivity()
+        {
+            if (Active && HighLogic.LoadedSceneIsFlight && DeathPlaques.Count > 0 && Options.showDeathPlaques)
+                DeathPlaques.NoteActivity(Time.realtimeSinceStartup);
+        }
+        private void PartExploded(GameEvents.ExplosionReaction reaction)
+        {
+            NoteAccidentActivity();
+        }
         private void PartDied(Part p)
         {
-            PartHint(p, "Part destroyed", "Probable", "onPartDie");
+            if (!Active || p == null)
+                return;
+            if (BuriedPartHint(p, "onPartDie") || DrownedPartHint(p, "onPartDie"))
+                return;
+            double gee = p.vessel != null && p.vessel.loaded ? p.vessel.geeForce : double.NaN;
+            string cause = Ledger.DestructionCause("Part destroyed", gee, false);
+            PartHint(p, cause, "Probable", "onPartDie" +
+                (double.IsNaN(gee) || double.IsInfinity(gee) ? "" : "; vessel acceleration " + gee.ToString("F1") + " g"));
         }
         private void GroundImpact(Part p)
         {
-            PartHint(p, "Ground impact", "Confirmed", "onPartExplodeGroundCollision");
+            if (!BuriedPartHint(p, "onPartExplodeGroundCollision") &&
+                !DrownedPartHint(p, "onPartExplodeGroundCollision"))
+                PartHint(p, "Ground impact", "Confirmed", "onPartExplodeGroundCollision");
+        }
+        private bool DrownedPartHint(Part p, string eventName)
+        {
+            if (!Active || p == null || p.flightID == 0 || p.vessel == null ||
+                p.vessel.situation != Vessel.Situations.SPLASHED)
+                return false;
+            // This is evidence of destruction while splashed, not proof of asphyxiation.
+            PartHint(p, Ledger.DrownedCause, "Confirmed", eventName + "; part destroyed while vessel situation was SPLASHED");
+            return true;
+        }
+        // Sample the part origin, not the vessel reference point. PQS height
+        // is measured from the body's center; subtract its radius to obtain
+        // terrain elevation on the same datum as CelestialBody.GetAltitude.
+        private bool BuriedPartHint(Part p, string eventName)
+        {
+            if (!Active || p == null || p.flightID == 0 || p.vessel == null || !p.vessel.loaded)
+                return false;
+            CelestialBody body = p.vessel.mainBody;
+            if (body == null || body.pqsController == null || p.transform == null)
+                return false;
+            double altitude;
+            double terrain;
+            try
+            {
+                Vector3d position = p.transform.position;
+                double latitude = body.GetLatitude(position);
+                double longitude = body.GetLongitude(position);
+                altitude = body.GetAltitude(position);
+                if (double.IsNaN(latitude) || double.IsInfinity(latitude) ||
+                    double.IsNaN(longitude) || double.IsInfinity(longitude) ||
+                    double.IsNaN(altitude) || double.IsInfinity(altitude))
+                    return false;
+                double radius = body.pqsController.radius;
+                if (radius <= 0 || double.IsNaN(radius) || double.IsInfinity(radius))
+                    return false;
+                double lat = latitude * Math.PI / 180.0;
+                double lon = longitude * Math.PI / 180.0;
+                Vector3d direction = new Vector3d(Math.Cos(lat) * Math.Cos(lon),
+                    Math.Sin(lat), Math.Cos(lat) * Math.Sin(lon));
+                double surface = body.pqsController.GetSurfaceHeight(direction);
+                if (surface <= 0 || double.IsNaN(surface) || double.IsInfinity(surface))
+                    return false;
+                // Do not clamp to sea level: underwater is not underground.
+                terrain = surface - radius;
+            }
+            catch (Exception e)
+            {
+                Log.Warning("[KerbalMemorial] Terrain height unavailable: " + e.Message);
+                return false;
+            }
+            if (!Ledger.IsBuried(altitude, terrain))
+                return false;
+            PartHint(p, Ledger.BuriedCause, "Confirmed", eventName +
+                "; part altitude " + altitude.ToString("F2") + " m, terrain elevation " +
+                terrain.ToString("F2") + " m, depth below terrain " +
+                (terrain - altitude).ToString("F2") + " m");
+            return true;
         }
         private void Crash(EventReport r)
         {
-            if (r != null)
-                PartHint(r.origin, "Crash", "Probable", ReportEvidence("onCrash", r));
+            ImpactHint(r, "Crash", "onCrash");
+        }
+        private void ImpactHint(EventReport r, string fallback, string eventName, string additional = "")
+        {
+            if (!Active || r == null || r.origin == null)
+                return;
+            Part p = r.origin;
+            double speed = Ledger.EventMeasurement(r.msg, r.param, false);
+            string cause = Ledger.ImpactCause(fallback, speed, p.crashTolerance);
+            string evidence = ReportEvidence(eventName, r) + additional +
+                "; crash tolerance " + p.crashTolerance.ToString("F1") + " m/s";
+            if (!double.IsNaN(speed))
+                evidence += "; reported impact speed " + speed.ToString("F1") + " m/s";
+            PartHint(p, cause, "Probable", evidence);
         }
         private static string ReportEvidence(string name, EventReport report)
         {
@@ -372,7 +516,10 @@ namespace KerbalMemorial
             if (!Active || r == null || r.origin == null)
                 return;
             var p = r.origin;
-            PartHint(p, "Overheating", "Confirmed", ReportEvidence("onOverheat", r) +
+            double reported = Ledger.EventMeasurement(r.msg, r.param, true);
+            string cause = Ledger.ThermalCause(reported, p.temperature, p.maxTemp, p.skinTemperature, p.skinMaxTemp);
+            PartHint(p, cause, "Confirmed", ReportEvidence("onOverheat", r) +
+                (double.IsNaN(reported) ? "" : "; reported temperature " + reported.ToString("F1") + " K") +
                 "; internal " + p.temperature.ToString("F1") + "/" + p.maxTemp.ToString("F1") + " K, skin " +
                 p.skinTemperature.ToString("F1") + "/" + p.skinMaxTemp.ToString("F1") + " K");
         }
@@ -381,7 +528,9 @@ namespace KerbalMemorial
             if (!Active || r == null || r.origin == null)
                 return;
             var p = r.origin;
-            PartHint(p, "Excessive G-force (structural failure)", "Confirmed", ReportEvidence("onOverG", r) +
+            double gee = p.vessel != null && p.vessel.loaded ? p.vessel.geeForce : double.NaN;
+            string cause = Ledger.DestructionCause("Excessive G-force (structural failure)", gee, false);
+            PartHint(p, cause, "Confirmed", ReportEvidence("onOverG", r) +
                 "; part tolerance " + p.gTolerance.ToString("F1") + " g" +
                 (p.vessel == null ? "" : ", vessel acceleration " + p.vessel.geeForce.ToString("F1") + " g"));
         }
@@ -393,9 +542,7 @@ namespace KerbalMemorial
         }
         private void Splashdown(EventReport r)
         {
-            if (!Active || r == null)
-                return;
-            PartHint(r.origin, "Water impact", "Probable", ReportEvidence("onCrashSplashdown", r));
+            ImpactHint(r, "Water impact", "onCrashSplashdown");
         }
         private void Collision(EventReport r)
         {
@@ -418,8 +565,8 @@ namespace KerbalMemorial
                         matches.Add(v);
                 }
             bool vesselCollision = origin != null && matches.Count == 1 && !matches.Contains(origin);
-            PartHint(r.origin, vesselCollision ? "Vessel collision" : "Collision", "Probable",
-                ReportEvidence("onCollision", r) + (other.Length == 0 ? "" : "; other: " + other));
+            ImpactHint(r, vesselCollision ? "Vessel collision" : "Collision", "onCollision",
+                other.Length == 0 ? "" : "; other: " + other);
         }
         private void PartFailure(Part p)
         {
@@ -453,6 +600,7 @@ namespace KerbalMemorial
         {
             if (!Active || v == null)
                 return;
+            NoteAccidentActivity();
             string cause = v.loaded ? "Ground impact" : "Unloaded vessel terrain impact";
             var ctx = FromVessel(v, null, "Vessel ground collision event");
             // Preserve each occupant's part information, including proto parts.
@@ -491,7 +639,10 @@ namespace KerbalMemorial
         }
         private void PartHint(Part p, string cause, string confidence, string source)
         {
-            if (!Active || p == null || p.flightID == 0)
+            if (!Active || p == null)
+                return;
+            NoteAccidentActivity();
+            if (p.flightID == 0)
                 return;
             var ctx = FromVessel(p.vessel, p, "Destruction event");
             var names = new HashSet<string>(p.protoModuleCrew.Where(c => c != null).Select(c => c.name));
@@ -515,12 +666,16 @@ namespace KerbalMemorial
         private void VesselDestroying(Vessel v)
         {
             if (Active)
+            {
+                NoteAccidentActivity();
                 CaptureVessel(v, "Vessel destruction event");
+            }
         }
         private void Terminated(ProtoVessel pv)
         {
             if (!Active || pv == null)
                 return;
+            NoteAccidentActivity();
             var ctx = pv.vesselRef != null ? FromVessel(pv.vesselRef, null, "Termination event") : new Context { Vessel = pv.vesselName, VesselId = pv.vesselID.ToString(), Situation = pv.situation.ToString(), UT = Now, Quality = "Termination event" };
             var names = new HashSet<string>(pv.GetVesselCrew().Where(c => c != null).Select(c => c.name));
             foreach (var p in snapshots)
@@ -540,12 +695,13 @@ namespace KerbalMemorial
             cause = Ledger.EvaCause(cause, ctx != null && ctx.EVA == "True");
             if (!hints.TryGetValue(name, out Hint previous) || !Fresh(previous) || !Ledger.SameContext(previous.Location, ctx))
                 hints[name] = new Hint { Cause = cause, Confidence = confidence, Source = source, Time = Time.realtimeSinceStartup, UT = Now, Location = ctx };
-            else if (Ledger.PreferCause(cause, confidence, previous.Cause, previous.Confidence))
+            else if (Ledger.PreferEvidence(cause, confidence, source, previous.Cause, previous.Confidence, previous.Source))
                 hints[name] = new Hint { Cause = cause, Confidence = confidence, Source = Ledger.MergeEvidence(source, previous.Source), Time = Time.realtimeSinceStartup, UT = Now, Location = ctx ?? previous.Location };
             else
                 previous.Source = Ledger.MergeEvidence(previous.Source, source);
             var r = Live.Open(name);
-            if (r != null && !r.Imported && r.UT >= 0 && Math.Abs(Now - r.UT) <= 5)
+            double incidentUT = r == null ? -1 : (r.Fatal && r.DeathUT >= 0 ? r.DeathUT : r.UT);
+            if (r != null && !r.Imported && incidentUT >= 0 && Math.Abs(Now - incidentUT) <= 5)
             {
                 string oldCause = r.Cause, oldConfidence = r.Confidence, oldSource = r.Source;
                 Context oldLocation = r.Location;
@@ -562,40 +718,58 @@ namespace KerbalMemorial
             // with a non-stock source as authoritative as well.
             if (r.Confidence == "Confirmed" && !Ledger.IsStockEvidence(r.Source))
                 return;
+            double incidentUT = r.Fatal && r.DeathUT >= 0 ? r.DeathUT : r.UT;
             if (hints.TryGetValue(r.Name, out Hint h) && Fresh(h) && Ledger.SameContext(r.Location, h.Location) &&
-                r.UT >= 0 && Math.Abs(h.UT - r.UT) <= 5)
+                incidentUT >= 0 && Math.Abs(h.UT - incidentUT) <= 5)
             {
                 string cause = Ledger.EvaCause(h.Cause, (h.Location != null && h.Location.EVA == "True") || (r.Location != null && r.Location.EVA == "True"));
-                if (Ledger.PreferCause(cause, h.Confidence, r.Cause, r.Confidence))
+                if (Ledger.PreferEvidence(cause, h.Confidence, h.Source, r.Cause, r.Confidence, r.Source))
                 {
                     r.Cause = cause;
                     r.Confidence = h.Confidence;
                     r.Source = h.Source;
                 }
-                else if (r.Cause == cause && r.Confidence == h.Confidence)
+                else
                     r.Source = Ledger.MergeEvidence(r.Source, h.Source);
                 if (h.Location != null && (r.Location == null || r.Location.Quality == "Last known"))
                 {
                     // A vessel-level hint must not discard an existing part ID.
                     if (r.Location == null || string.IsNullOrEmpty(r.Location.PartId) || !string.IsNullOrEmpty(h.Location.PartId))
-                        r.Location = h.Location.Copy();
+                    {
+                        var location = h.Location.Copy();
+                        if (r.Location != null && location.EVA == "True" && location.PartId == r.Location.PartId && location.EvaDepartureUT < 0)
+                            location.EvaDepartureUT = r.Location.EvaDepartureUT;
+                        r.Location = location;
+                    }
                 }
             }
-            if (r.Fatal && r.Location != null && r.Location.EVA == "True" && r.Location.UT >= 0 && Math.Abs(r.UT - r.Location.UT) <= 5 && (r.Cause == "Unknown" || r.Cause == "Part destroyed" || r.Cause == "Crash"))
+            AttachEvaDeparture(r.Location);
+            Ledger.ApplySpaced(r, KSPUtil.dateTimeFormatter.Day, Time.realtimeSinceStartup);
+            if (r.Fatal && Ledger.FreshDeathContext(r.Location, r.DeathUT) && r.Location.EVA == "True" &&
+                (r.Cause == "Unknown" || r.Cause == "Part destroyed") && !Ledger.IsImpactEvidence(r.Cause, r.Source))
             {
                 r.Cause = "EVA accident — unknown cause";
                 r.Confidence = "Probable";
                 r.Source = Ledger.MergeEvidence(r.Source, "Last known vessel was EVA; specific cause unavailable");
             }
         }
+        private void AttachEvaDeparture(Context ctx)
+        {
+            if (ctx != null && ctx.EVA == "True" && !string.IsNullOrEmpty(ctx.PartId) &&
+                evaDepartures.TryGetValue(ctx.PartId, out double ut) && ut <= ctx.UT)
+                ctx.EvaDepartureUT = ut;
+        }
         private void Store(string name, Context ctx)
         {
             if (ctx != null && !string.IsNullOrEmpty(name))
+            {
+                AttachEvaDeparture(ctx);
                 snapshots[name] = ctx;
+            }
         }
         private static Context FromVessel(Vessel v, Part p, string quality)
         {
-            var c = new Context { UT = Now, Quality = quality };
+            var c = new Context { UT = Now, Quality = quality, ObservedRealtime = Time.realtimeSinceStartup };
             if (v != null)
             {
                 c.Vessel = v.vesselName;
@@ -698,10 +872,16 @@ namespace KerbalMemorial
                 r.Level = crew.experienceLevel.ToString();
                 if (r.Source.Length == 0)
                     r.Source = source;
-                if (r.Location == null && !imported && snapshots.TryGetValue(crew.name, out Context ctx))
+                if (!imported && !wasFatal && r.Fatal &&
+                    (!snapshots.TryGetValue(crew.name, out Context deathContext) || !Ledger.FreshDeathContext(deathContext, r.DeathUT)))
+                    CaptureCurrent(crew.name);
+                if (!imported && snapshots.TryGetValue(crew.name, out Context ctx) &&
+                    (r.Location == null || (!wasFatal && r.Fatal && Ledger.RecentEvaContext(ctx, r.DeathUT, Time.realtimeSinceStartup))))
                     r.Location = ctx.Copy();
                 if (!imported)
                     ApplyHint(r);
+                if (r.Fatal && r.Location != null && r.Location.EVA == "True")
+                    evaDepartures.Remove(r.Location.PartId);
                 r.History = History(crew);
                 if (!imported && Options.notifications && (old == null || (!wasFatal && r.Fatal)))
                     ScreenMessages.PostScreenMessage(crew.name + (r.Fatal ? " has died." : " is missing."), 4f, ScreenMessageStyle.UPPER_CENTER);

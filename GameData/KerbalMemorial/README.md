@@ -16,8 +16,9 @@ When a Kerbal dies, Kerbal Memorial can automatically display a memorial plaque.
 
 ### Default behavior
 
-- Plaques appear **1.5 seconds** after a confirmed death.
+- Plaques appear after **1.5 seconds** without another death, explosion or accident event.
 - Plaques fade in and out over **2 seconds**.
+- Close and Details are hidden during fade-in and crossfades.
 - Multiple casualties are queued and displayed one after another.
 - Flight Results are delayed until all memorial notifications have finished.
 

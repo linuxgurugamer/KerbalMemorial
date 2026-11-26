@@ -12,6 +12,8 @@ namespace KerbalMemorial
         {
             internal string Id;
             internal double ReadyAt;
+            internal double Delay;
+            internal bool Started;
         }
         private readonly Queue<Entry> pending = new Queue<Entry>();
         internal const float DefaultDelay = 1.5f;
@@ -35,11 +37,31 @@ namespace KerbalMemorial
             if (!enabled || record == null || !record.Fatal || wasFatal || imported ||
                 string.IsNullOrEmpty(record.Id) || !accepted.Add(record.Id))
                 return false;
-            pending.Enqueue(new Entry { Id = record.Id, ReadyAt = now + ClampDelay(delay) });
+            pending.Enqueue(new Entry { Id = record.Id, Delay = ClampDelay(delay), ReadyAt = now + ClampDelay(delay) });
+            NoteActivity(now);
             return true;
         }
-        internal bool IsReady(double now) => pending.Count > 0 && now >= pending.Peek().ReadyAt;
-        // Advance only when the next queued death has reached its own deadline.
+        // A crash can continue after a crew-killed event. Restart the quiet
+        // interval for every plaque that has not begun presentation yet.
+        // Each entry retains the configured delay at its confirmation.
+        internal void NoteActivity(double now)
+        {
+            foreach (var entry in pending)
+            {
+                if (!entry.Started)
+                    entry.ReadyAt = Math.Max(entry.ReadyAt, now + entry.Delay);
+            }
+        }
+        internal bool IsReady(double now) => pending.Count > 0 &&
+            (pending.Peek().Started || now >= pending.Peek().ReadyAt);
+        internal bool TryStart(string id, double now)
+        {
+            if (pending.Count == 0 || pending.Peek().Id != id || !IsReady(now))
+                return false;
+            pending.Peek().Started = true;
+            return true;
+        }
+        // Advance only after the next queued death's quiet interval has elapsed.
         // The presentation retains the acknowledged window during its fade-out.
         internal bool TryAdvanceForCrossfade(string id, double now)
         {

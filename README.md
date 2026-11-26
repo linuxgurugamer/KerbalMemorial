@@ -15,6 +15,14 @@ A **"Days Since Last Accident"** safety sign can be displayed in the VAB and SPH
 KRASH simulations are ignored automatically, and other mods can report confirmed fatalities through an optional integration API.
 
 ---
+# Dependencies
+
+### ModuleManager
+### ClickThroughBlocker
+### ToolbarController
+### SpaceTuxLibrary
+
+---
 
 # Quick Start
 
@@ -22,8 +30,9 @@ When a Kerbal dies, Kerbal Memorial can automatically display a memorial plaque.
 
 ### Default behavior
 
-- Plaques appear **1.5 seconds** after a confirmed death.
+- Plaques appear after **1.5 seconds** without another death, explosion or accident event.
 - Plaques fade in and out over **2 seconds**.
+- Close and Details are hidden during fade-in and crossfades.
 - Multiple casualties are queued and displayed one after another.
 - Flight Results are delayed until all memorial notifications have finished.
 
@@ -390,7 +399,13 @@ Kerbal Memorial attempts to identify likely causes of death using stock KSP even
 
 Supported classifications include:
 
-- Overheating
+- **Cooked** — stock overheating failure.
+- **Atomized** — stock overheating failure with a reported temperature of at least 10,000 K, or an over-limit internal/skin temperature of at least 10,000 K.
+- **Stomped (1)** — reported impact speed at least twice the occupied part's crash tolerance.
+- **Stomped (2)** — destruction at 15 g or more without matching impact evidence.
+- **Buried** — part destroyed at least 0.5 m below local PQS terrain, measured at the part origin (not sea level). Overrides other stock causes when detected; unavailable terrain data retains the ordinary classification.
+- **Spaced** — unexplained confirmed EVA death while orbiting. A recorded hatch departure within one game-calendar day and fresh game-time context give Probable confidence; older/unknown departures or recent real-time-only context during warp give Possible confidence. Known stock causes and external reports take precedence; this label does not prove starvation.
+- **Drowned** — part destroyed while its vessel is in the stock SPLASHED situation. Takes priority over other stock causes except Buried; external reports remain authoritative. This label does not prove suffocation or a stock drowning mechanic.
 - Excessive G-forces
 - Over-pressure
 - Ground impact
@@ -399,7 +414,7 @@ Supported classifications include:
 - Part failures
 - Joint failures
 
-EVA incidents receive specialized classifications when sufficient evidence exists.
+EVA incidents receive specialized classifications when sufficient evidence exists; the finer classifications also apply to EVA. The report's explicit temperature/speed measurement is preferred to its numeric event parameter. If a usable impact speed is unavailable, generic impact classifications remain available. Stomped (2) is corrected if a matching stock impact report arrives within the existing casualty correlation window. High G-force alone never creates a fatality.
 
 > These classifications are best-effort approximations, not definitive accident investigations.
 

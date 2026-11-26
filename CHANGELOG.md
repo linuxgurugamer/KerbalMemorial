@@ -1,3 +1,21 @@
+# 0.1.0.64
+- Hide Details and Close during automatic plaque fade-in and crossfades; reveal them once the incoming plaque is fully visible and interactive.
+
+# 0.1.0.63
+- Wait for the configured quiet interval after the last death or accident event (including explosions) before displaying pending automatic memorial plaques. Keep visible plaques and transitions active.
+
+# 0.1.0.62
+- Classify part destruction in the stock SPLASHED situation as Drowned, preserving higher-priority terrain burial and external reports.
+
+# 0.1.0.61
+- Add Spaced as the fallback cause for unexplained confirmed orbital EVA deaths. Persist EVA hatch departure times, prefer recent departures within one calendar day, and allow later specific stock or external causes to supersede the fallback.
+
+# 0.1.0.60
+- Classify loaded part destruction at least 0.5 m below local PQS terrain as Buried. Include part altitude, terrain elevation and penetration depth; prefer this specific cause over other stock classifications while preserving external reports.
+
+# 0.1.0.59
+- Classify thermal failures as Cooked or Atomized (reported or over-limit temperature of at least 10,000 K). Refine measured impacts at least twice crash tolerance to Stomped (1), and non-impact destruction at 15 g or higher to Stomped (2). Correlate late impact reports before retaining a G-only label, and preserve authoritative external causes.
+
 # 0.1.0.58
 - Hide outdoor X/Y offsets, rotation and their explanatory text and column headings by default; add a Show position and rotation toggle. Keep width, height and mounting controls visible.
 
