@@ -55,6 +55,7 @@ Select **Kerbal Memorial** at the bottom of the wall to open the main ledger, wh
 
 # Memorial Wall
 
+| Image 1 Title | Image 2 Title |
 | :---: | :---: |
 |  ![Memorial Wall](./Images/MemorialWallClassic.png) |  ![Memorial Wall](./Images/MemorialWallAlternate.png) |
 
