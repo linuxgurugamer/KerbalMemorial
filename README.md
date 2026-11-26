@@ -193,6 +193,8 @@ If no deceased inscriptions are available, the original notes remain visible.
 
 # Days Since Last Accident Sign
 
+![Indoor Sign](./Images/Indoor.png)
+
 Kerbal Memorial includes a safety sign that displays the number of in-game days since the most recent incident.
 
 The sign appears in:
@@ -213,6 +215,8 @@ Changes update immediately and are saved automatically.
 ---
 
 # Outdoor Signs
+
+![Outdoor Sign](./Images/Outdoor.png)
 
 Optional outdoor accident signs can be placed throughout the Kerbal Space Center.
 
